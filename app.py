@@ -545,7 +545,9 @@ with tab_market:
     st.markdown(
         f"**Заказчик в среднем присылает бриф, заполненный на {stats['completeness_before']}%.** "
         f"После разбора запроса приложением — **{stats['completeness_after']}%**. "
-        f"Это {stats['lift']} процентных пунктов, которые подрядчику больше не нужно вытягивать перепиской."
+        f"Это {stats['lift']} процентных "
+        f"{core.plural(stats['lift'], 'пункт', 'пункта', 'пунктов')}, "
+        "которые подрядчику больше не нужно вытягивать перепиской."
     )
 
     before_after = pd.DataFrame(
@@ -592,7 +594,7 @@ with tab_market:
     if stats["reasons"]:
         st.markdown("**Почему заявки остаются без исполнителя:**")
         for reason, count in sorted(stats["reasons"].items(), key=lambda x: -x[1]):
-            word = "заявка" if count == 1 else ("заявки" if count < 5 else "заявок")
+            word = core.plural(count, "заявка", "заявки", "заявок")
             st.markdown(f"- {reason} — **{count}** {word} из {stats['total']}")
     if stats["idle"]:
         st.markdown("**Простаивают без подходящих заявок:** " +

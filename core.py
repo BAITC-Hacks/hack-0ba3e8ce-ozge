@@ -461,6 +461,19 @@ def load_requests():
         return json.load(f)
 
 
+def plural(number, one, few, many):
+    """Русское склонение после числа: 1 пункт, 2 пункта, 5 пунктов."""
+    number = abs(int(number))
+    if number % 100 in (11, 12, 13, 14):
+        return many
+    last = number % 10
+    if last == 1:
+        return one
+    if last in (2, 3, 4):
+        return few
+    return many
+
+
 def money(value):
     """Форматирует сумму: 250000 -> «250 000 ₸»."""
     if not value:
