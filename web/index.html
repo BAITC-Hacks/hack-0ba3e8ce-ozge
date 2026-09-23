@@ -1,0 +1,536 @@
+<title>Умный подбор подрядчиков</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Golos+Text:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F4F6F5; --surface:#FFFFFF; --sunk:#EDF1F0;
+  --ink:#14211F; --ink-2:#3D4E4B; --muted:#687A76; --line:#DEE6E4;
+  --accent:#0C6E6B; --accent-soft:#D8EAE8;
+  --good:#1C7A4E; --warn:#A9711A; --crit:#A63B2F;
+  --good-bg:#E3F1E9; --warn-bg:#F7EEDD; --crit-bg:#F7E4E0;
+  --radius:10px;
+  --display:"Bitter",Georgia,"Times New Roman",serif;
+  --body:"Golos Text","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1413; --surface:#151F1E; --sunk:#1B2625;
+    --ink:#ECF2F0; --ink-2:#C2CFCC; --muted:#8FA09D; --line:#243130;
+    --accent:#45B5AF; --accent-soft:#17302F;
+    --good:#4FAE7C; --warn:#D3A14A; --crit:#D9776A;
+    --good-bg:#14261D; --warn-bg:#2A2216; --crit-bg:#2B1A17;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1413; --surface:#151F1E; --sunk:#1B2625;
+  --ink:#ECF2F0; --ink-2:#C2CFCC; --muted:#8FA09D; --line:#243130;
+  --accent:#45B5AF; --accent-soft:#17302F;
+  --good:#4FAE7C; --warn:#D3A14A; --crit:#D9776A;
+  --good-bg:#14261D; --warn-bg:#2A2216; --crit-bg:#2B1A17;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:780px;margin:0 auto;padding-inline:20px;padding-block:32px 56px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,6vw,40px);line-height:1.12;letter-spacing:-.01em}
+h2{font-size:20px;margin-block:0 10px}
+h3{font-size:17px;margin:0}
+p{margin:0}
+.eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.lede{color:var(--ink-2);font-size:17px;margin-top:12px;max-width:62ch}
+header{display:flex;flex-direction:column;gap:6px}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:26px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.stat .k{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat .v{font-family:var(--display);font-size:clamp(22px,5vw,29px);font-variant-numeric:tabular-nums;margin-top:4px;line-height:1.1}
+.stat .n{font-size:12.5px;color:var(--muted);margin-top:3px}
+.pains{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.pain{background:var(--sunk);border-radius:var(--radius);padding:13px 14px;font-size:14px;color:var(--ink-2)}
+.pain b{color:var(--ink);display:block;margin-bottom:3px;font-weight:600}
+
+nav.tabs{display:flex;gap:4px;margin-top:34px;border-bottom:1px solid var(--line)}
+.tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;
+  padding:9px 14px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;font-size:15px}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+section{margin-top:24px}
+.label{font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.chip{appearance:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;
+  padding:7px 13px;font:inherit;font-size:13.5px;color:var(--ink-2);cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);padding:12px 13px}
+textarea{min-height:104px;resize:vertical}
+textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.go{appearance:none;width:100%;margin-top:10px;background:var(--accent);color:#fff;border:0;
+  border-radius:var(--radius);padding:13px;font:inherit;font-weight:600;font-size:15.5px;cursor:pointer}
+.go:hover{filter:brightness(1.08)}
+.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.brief{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-top:20px}
+.meter{height:5px;background:var(--sunk);border-radius:3px;overflow:hidden;margin:10px 0 14px}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .35s ease}
+.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.field .k{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.field .v{font-family:var(--display);font-size:16px;margin-top:2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.rows{margin-top:14px;display:grid;gap:5px;font-size:14.5px;color:var(--ink-2)}
+.rows b{color:var(--ink);font-weight:600}
+.guessed{margin-top:14px;padding:12px 13px;background:var(--sunk);border-radius:8px;font-size:14px;color:var(--ink-2)}
+.guessed ul{margin:6px 0 0;padding-left:18px;display:grid;gap:4px}
+.note{margin-top:14px;padding:12px 13px;border-radius:8px;font-size:14.5px}
+.note.ask{background:var(--warn-bg);color:var(--ink)}
+.note.ok{background:var(--good-bg);color:var(--ink)}
+.note.bad{background:var(--crit-bg);color:var(--ink)}
+.note ol{margin:7px 0 0;padding-left:20px;display:grid;gap:4px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:15px;margin-top:10px;position:relative}
+.card.flag{border-left:3px solid var(--crit)}
+.card.warnflag{border-left:3px solid var(--warn)}
+.card.okflag{border-left:3px solid var(--good)}
+.chead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.meta{font-size:13.5px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+.score{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.bar{height:3px;background:var(--sunk);border-radius:2px;margin-top:9px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.say{margin-top:11px;font-size:14.5px;color:var(--ink-2)}
+.port{margin-top:9px;font-size:13.5px;color:var(--muted)}
+.why{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;font-size:14px}
+.why ul{margin:5px 0 0;padding-left:17px;display:grid;gap:3px;color:var(--ink-2)}
+.why .k{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.lights{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px;font-size:13.5px}
+.light{padding:9px 10px;border-radius:8px;color:var(--ink)}
+.light b{display:block;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px;font-weight:600}
+.light.g{background:var(--good-bg)} .light.w{background:var(--warn-bg)} .light.c{background:var(--crit-bg)}
+.quote{margin-top:11px;padding-left:11px;border-left:2px solid var(--line);font-size:14.5px;color:var(--ink-2)}
+details{margin-top:12px}
+summary{cursor:pointer;font-weight:600;font-size:14.5px;color:var(--accent)}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+pre{margin:10px 0 0;padding:13px;background:var(--sunk);border-radius:8px;overflow-x:auto;
+  font-size:13px;line-height:1.5;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink-2)}
+footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)}
+footer a{color:var(--accent)}
+@media (max-width:640px){
+  .stats,.fields,.lights{grid-template-columns:1fr 1fr}
+  .pains,.why{grid-template-columns:1fr}
+  .stats .stat:last-child{grid-column:1/-1}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">HackAlem AI · Креативные индустрии · команда OZGE</p>
+  <h1>Умный подбор подрядчиков</h1>
+  <p class="lede">Заказчик пишет запрос обычными словами — площадка превращает его в нормальный бриф
+  и находит подрядчиков по услуге, бюджету, городу и сроку. Подрядчик видит, кто не по бюджету,
+  до первого сообщения.</p>
+
+  <div class="stats" id="stats"></div>
+  <div class="pains">
+    <div class="pain"><b>Боль заказчика</b>Не умеет формулировать: «хочу что-нибудь красивое для инстаграма».</div>
+    <div class="pain"><b>Боль подрядчика</b>Кривые брифы и заказчики не по бюджету. Переписка ни о чём.</div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab" id="tab-c" role="tab" aria-selected="true" aria-controls="panel-c">Я заказчик</button>
+  <button class="tab" id="tab-p" role="tab" aria-selected="false" aria-controls="panel-p">Я подрядчик</button>
+</nav>
+
+<section id="panel-c" role="tabpanel" aria-labelledby="tab-c">
+  <p class="label">Запрос заказчика</p>
+  <div class="chips" id="examples"></div>
+  <textarea id="req" aria-label="Запрос обычными словами"></textarea>
+  <button class="go" id="run">Собрать бриф и подобрать подрядчиков</button>
+  <div id="out"></div>
+</section>
+
+<section id="panel-p" role="tabpanel" aria-labelledby="tab-p" hidden>
+  <p class="label">Ваш профиль</p>
+  <select id="me" aria-label="Профиль подрядчика"></select>
+  <div id="inbox"></div>
+</section>
+
+<footer>
+  <p><b>Данные демонстрационные и вымышленные:</b> 40 подрядчиков и 12 заявок собраны по реальной
+  структуре рынка Казахстана, но не соответствуют настоящим компаниям и людям.</p>
+  <p style="margin-top:8px">Эта страница — веб-версия проекта. Полное приложение на Python и Streamlit,
+  с разбором запроса через OpenAI, сохранением сделок и выгрузкой в CSV — в репозитории команды.
+  Подбор здесь считает тот же алгоритм, что и в приложении.</p>
+</footer>
+</div>
+
+<script type="application/json" id="db">{"contractors":[{"id":"C01","name":"Студия «Кадр»","service":"Видеопродакшн","city":"Астана","price_min":250000,"price_max":900000,"unit":"за ролик","styles":["кинематографично","премиум","спокойный темп"],"formats":["рекламный ролик","имиджевое видео","интервью"],"languages":["рус","каз"],"lead_time_days":14,"rating":4.8,"reviews":37,"portfolio":"Имиджевые ролики для банков и застройщиков: выезд со светом, два оператора, цветокоррекция. Любят длинные планы и сдержанную картинку."},{"id":"C02","name":"Ozge-like Media","service":"Видеопродакшн","city":"Астана","price_min":120000,"price_max":400000,"unit":"за съёмочный день","styles":["динамично","современно","соцсети"],"formats":["рилс","вертикальное видео","обучающий курс"],"languages":["рус","каз"],"lead_time_days":7,"rating":4.9,"reviews":52,"portfolio":"Контент-студия полного цикла: съёмка уроков и вертикальных роликов пачками, субтитры, монтаж за 3 дня. Работают с экспертами и онлайн-школами."},{"id":"C03","name":"Айдос Ж.","service":"Видеомонтаж","city":"онлайн","price_min":25000,"price_max":80000,"unit":"за ролик","styles":["динамично","клиповый монтаж"],"formats":["рилс","ютуб-ролик","шортс"],"languages":["рус"],"lead_time_days":3,"rating":4.6,"reviews":24,"portfolio":"Монтажёр-фрилансер: склейка, субтитры, звук, простая графика. Делает быстро, берёт сериями по 10 роликов."},{"id":"C04","name":"Meruert Cut","service":"Видеомонтаж","city":"Алматы","price_min":40000,"price_max":150000,"unit":"за ролик","styles":["аккуратно","минимализм"],"formats":["ютуб-ролик","подкаст","интервью"],"languages":["рус","каз","англ"],"lead_time_days":5,"rating":4.7,"reviews":31,"portfolio":"Монтаж длинных интервью и подкастов: многокамерная сборка, чистка звука, оформление титров."},{"id":"C05","name":"Reels Factory","service":"Видеомонтаж","city":"онлайн","price_min":15000,"price_max":45000,"unit":"за ролик","styles":["дерзко","трендово","быстрый темп"],"formats":["рилс","шортс","тикток"],"languages":["рус","каз"],"lead_time_days":2,"rating":4.4,"reviews":88,"portfolio":"Поток вертикальных роликов под соцсети: хуки, крупные субтитры, трендовые звуки. Подписка на 20 роликов в месяц."},{"id":"C06","name":"Фотостудия «Свет»","service":"Фотосъёмка","city":"Астана","price_min":60000,"price_max":250000,"unit":"за съёмку","styles":["чистый фон","каталог","премиум"],"formats":["предметная съёмка","каталог","портрет"],"languages":["рус","каз"],"lead_time_days":5,"rating":4.7,"reviews":45,"portfolio":"Предметка и каталог для маркетплейсов: белый фон, 20–200 кадров за смену, ретушь включена."},{"id":"C07","name":"Дана Б.","service":"Фотосъёмка","city":"Алматы","price_min":45000,"price_max":120000,"unit":"за съёмку","styles":["тёплый свет","лайфстайл","живые эмоции"],"formats":["портрет","репортаж","лукбук"],"languages":["рус","англ"],"lead_time_days":4,"rating":4.9,"reviews":63,"portfolio":"Лайфстайл-фотограф: естественный свет, съёмки команд и личных брендов, 50 обработанных кадров."},{"id":"C08","name":"Event Shot","service":"Фотосъёмка","city":"Астана","price_min":80000,"price_max":200000,"unit":"за мероприятие","styles":["репортаж","быстрая сдача"],"formats":["репортаж","конференция","свадьба"],"languages":["рус","каз"],"lead_time_days":2,"rating":4.5,"reviews":72,"portfolio":"Съёмка конференций и форумов: два фотографа, черновые кадры в тот же вечер, финал за 48 часов."},{"id":"C09","name":"Brand Lab","service":"Брендинг и логотип","city":"Алматы","price_min":400000,"price_max":1500000,"unit":"за проект","styles":["минимализм","премиум","системно"],"formats":["логотип","фирменный стиль","брендбук"],"languages":["рус","англ"],"lead_time_days":30,"rating":4.8,"reviews":19,"portfolio":"Брендинговое агентство: исследование, позиционирование, знак, брендбук на 60 страниц. Работают с сетями и финтехом."},{"id":"C10","name":"Тимур К.","service":"Брендинг и логотип","city":"онлайн","price_min":80000,"price_max":250000,"unit":"за проект","styles":["минимализм","геометрия"],"formats":["логотип","мини-гайдлайн"],"languages":["рус","каз"],"lead_time_days":10,"rating":4.6,"reviews":28,"portfolio":"Дизайнер-фрилансер: знак, логотип, цвета и шрифты на 10 страниц. Три варианта на выбор, две правки."},{"id":"C11","name":"Qyzyl Design","service":"Графический дизайн","city":"Астана","price_min":30000,"price_max":120000,"unit":"за пакет","styles":["яркий","национальные мотивы"],"formats":["полиграфия","баннер","презентация"],"languages":["каз","рус"],"lead_time_days":6,"rating":4.5,"reviews":41,"portfolio":"Дизайн-студия: макеты для печати, наружка, оформление мероприятий с казахскими орнаментами."},{"id":"C12","name":"Slides Pro","service":"Графический дизайн","city":"онлайн","price_min":50000,"price_max":180000,"unit":"за презентацию","styles":["деловой","строго","инфографика"],"formats":["презентация","питч-дек","отчёт"],"languages":["рус","англ"],"lead_time_days":5,"rating":4.7,"reviews":34,"portfolio":"Презентации для инвесторов и тендеров: структура, инфографика, 20–40 слайдов, исходники в PowerPoint."},{"id":"C13","name":"Айгерим SMM","service":"SMM и контент","city":"Астана","price_min":150000,"price_max":350000,"unit":"в месяц","styles":["живой","экспертный"],"formats":["ведение инстаграм","контент-план","сторис"],"languages":["рус","каз"],"lead_time_days":3,"rating":4.6,"reviews":47,"portfolio":"Ведение аккаунтов экспертов и клиник: контент-план, 12 постов и 30 сторис в месяц, съёмка раз в месяц."},{"id":"C14","name":"Digital Nomad KZ","service":"SMM и контент","city":"Алматы","price_min":250000,"price_max":700000,"unit":"в месяц","styles":["системно","аналитика"],"formats":["ведение инстаграм","тикток","стратегия"],"languages":["рус","англ"],"lead_time_days":7,"rating":4.7,"reviews":22,"portfolio":"Агентство: стратегия, продакшн, отчётность по цифрам. Берут проекты от полугода, есть менеджер на проекте."},{"id":"C15","name":"Салтанат SMM","service":"SMM и контент","city":"онлайн","price_min":60000,"price_max":150000,"unit":"в месяц","styles":["простой","бюджетно"],"formats":["ведение инстаграм","оформление профиля"],"languages":["каз","рус"],"lead_time_days":2,"rating":4.3,"reviews":56,"portfolio":"Фрилансер для малого бизнеса: оформление профиля, 8 постов в месяц, простые рилсы из материала заказчика."},{"id":"C16","name":"Perf Media","service":"Таргетированная реклама","city":"Алматы","price_min":200000,"price_max":500000,"unit":"в месяц","styles":["аналитика","результат"],"formats":["таргет инстаграм","гугл-реклама"],"languages":["рус","англ"],"lead_time_days":5,"rating":4.6,"reviews":30,"portfolio":"Перформанс-агентство: настройка и ведение рекламы, дашборд с ценой заявки, минимальный бюджет на открутку 300 000 ₸."},{"id":"C17","name":"Ернур Т.","service":"Таргетированная реклама","city":"онлайн","price_min":80000,"price_max":180000,"unit":"в месяц","styles":["быстро","гибко"],"formats":["таргет инстаграм","тикток-реклама"],"languages":["рус","каз"],"lead_time_days":2,"rating":4.4,"reviews":39,"portfolio":"Таргетолог-фрилансер: запуск за два дня, работа с малым бюджетом, отчёт в таблице раз в неделю."},{"id":"C18","name":"Сөз Копирайт","service":"Копирайтинг","city":"онлайн","price_min":15000,"price_max":70000,"unit":"за текст","styles":["живой","разговорный"],"formats":["тексты для сайта","посты","сценарии"],"languages":["каз","рус"],"lead_time_days":3,"rating":4.5,"reviews":44,"portfolio":"Тексты на казахском и русском: лендинги, посты, сценарии для рилсов. Пишут без канцелярита."},{"id":"C19","name":"Мария Л.","service":"Копирайтинг","city":"Алматы","price_min":40000,"price_max":150000,"unit":"за текст","styles":["деловой","экспертный"],"formats":["статьи","email-рассылки","тексты для сайта"],"languages":["рус","англ"],"lead_time_days":5,"rating":4.8,"reviews":26,"portfolio":"Коммерческий редактор: статьи для B2B, рассылки, редполитика. Берёт проекты с интервью эксперта."},{"id":"C20","name":"Web Aul","service":"Веб-дизайн и сайты","city":"Астана","price_min":300000,"price_max":1200000,"unit":"за сайт","styles":["современно","анимация"],"formats":["лендинг","корпоративный сайт","интернет-магазин"],"languages":["рус","каз","англ"],"lead_time_days":21,"rating":4.7,"reviews":18,"portfolio":"Студия: дизайн и сборка сайтов на Tilda и на коде, интеграция с CRM, адаптив под телефон."},{"id":"C21","name":"Ляззат UI","service":"Веб-дизайн и сайты","city":"онлайн","price_min":120000,"price_max":350000,"unit":"за сайт","styles":["минимализм","чисто"],"formats":["лендинг","дизайн приложения"],"languages":["рус","англ"],"lead_time_days":10,"rating":4.6,"reviews":25,"portfolio":"UI-дизайнер: макеты в Figma, дизайн-система, передача разработчику. Собирает лендинг на Tilda сама."},{"id":"C22","name":"Motion Bar","service":"Моушн-дизайн","city":"Алматы","price_min":100000,"price_max":450000,"unit":"за ролик","styles":["яркий","графика","динамично"],"formats":["анимационный ролик","заставка","инфографика"],"languages":["рус","англ"],"lead_time_days":12,"rating":4.8,"reviews":21,"portfolio":"Анимационные объясняющие ролики: сценарий, раскадровка, 2D-графика, озвучка. 60–120 секунд."},{"id":"C23","name":"Нурлан М.","service":"Моушн-дизайн","city":"онлайн","price_min":35000,"price_max":120000,"unit":"за ролик","styles":["простой","быстро"],"formats":["титры","анимация логотипа","инфографика"],"languages":["рус","каз"],"lead_time_days":4,"rating":4.4,"reviews":33,"portfolio":"Моушн-фрилансер: анимация логотипа, титры и плашки для видео, простая инфографика."},{"id":"C24","name":"Дыбыс Студия","service":"Озвучка и звук","city":"Астана","price_min":25000,"price_max":100000,"unit":"за ролик","styles":["профессионально","дикторский голос"],"formats":["озвучка","сведение звука","аудиореклама"],"languages":["каз","рус"],"lead_time_days":3,"rating":4.7,"reviews":29,"portfolio":"Запись дикторов на казахском и русском, чистка и сведение звука для видео и радио."},{"id":"C25","name":"Sound Aq","service":"Озвучка и звук","city":"онлайн","price_min":10000,"price_max":50000,"unit":"за ролик","styles":["бюджетно","быстро"],"formats":["озвучка","подбор музыки"],"languages":["рус"],"lead_time_days":2,"rating":4.2,"reviews":48,"portfolio":"Домашняя студия: озвучка роликов, подбор лицензионной музыки, чистка шума."},{"id":"C26","name":"Ainur Illustration","service":"Иллюстрация","city":"онлайн","price_min":30000,"price_max":200000,"unit":"за пакет","styles":["тёплый","акварель","национальные мотивы"],"formats":["иллюстрации для сайта","детская книга","стикеры"],"languages":["каз","рус"],"lead_time_days":10,"rating":4.9,"reviews":27,"portfolio":"Иллюстратор: серии рисунков для книг и приложений, авторский тёплый стиль, узнаваемые персонажи."},{"id":"C27","name":"Vector Guys","service":"Иллюстрация","city":"Алматы","price_min":20000,"price_max":90000,"unit":"за пакет","styles":["плоский","корпоративный"],"formats":["иконки","иллюстрации для презентаций"],"languages":["рус","англ"],"lead_time_days":6,"rating":4.4,"reviews":35,"portfolio":"Векторные иконки и корпоративные иллюстрации под фирменные цвета заказчика."},{"id":"C28","name":"3D Astana","service":"3D и визуализация","city":"Астана","price_min":150000,"price_max":800000,"unit":"за проект","styles":["реалистично","архитектура"],"formats":["визуализация интерьера","3D-ролик","предметная 3D"],"languages":["рус","англ"],"lead_time_days":18,"rating":4.6,"reviews":16,"portfolio":"Архитектурная визуализация и 3D-ролики для застройщиков: планировки, облёты, реалистичный свет."},{"id":"C29","name":"Renderoom","service":"3D и визуализация","city":"онлайн","price_min":60000,"price_max":250000,"unit":"за проект","styles":["предметка","чисто"],"formats":["предметная 3D","упаковка","анимация продукта"],"languages":["рус"],"lead_time_days":9,"rating":4.5,"reviews":23,"portfolio":"3D-предметка для маркетплейсов и упаковки: модель, материалы, короткая анимация вращения."},{"id":"C30","name":"Студия «Алаш»","service":"Аренда студии","city":"Астана","price_min":15000,"price_max":45000,"unit":"в час","styles":["циклорама","свет в комплекте"],"formats":["съёмочный павильон","предметный стол","подкаст-зона"],"languages":["рус","каз"],"lead_time_days":1,"rating":4.7,"reviews":91,"portfolio":"Павильон 120 м²: белая циклорама, постоянный свет, гримёрка, подкаст-зона на три камеры."},{"id":"C31","name":"Loft Almaty","service":"Аренда студии","city":"Алматы","price_min":20000,"price_max":60000,"unit":"в час","styles":["лофт","дневной свет"],"formats":["съёмочный павильон","интерьерные зоны"],"languages":["рус","англ"],"lead_time_days":1,"rating":4.6,"reviews":78,"portfolio":"Лофт с панорамными окнами и тремя интерьерными зонами, подходит для лукбуков и интервью."},{"id":"C32","name":"Event Qazaq","service":"Организация мероприятий","city":"Астана","price_min":500000,"price_max":3000000,"unit":"за мероприятие","styles":["национальный колорит","масштабно"],"formats":["корпоратив","форум","открытие"],"languages":["каз","рус"],"lead_time_days":25,"rating":4.5,"reviews":20,"portfolio":"Организация форумов и корпоративов: площадка, сцена, ведущий, артисты, техническое обеспечение."},{"id":"C33","name":"Small Events","service":"Организация мероприятий","city":"Алматы","price_min":200000,"price_max":800000,"unit":"за мероприятие","styles":["камерно","уютно"],"formats":["встреча с клиентами","презентация продукта"],"languages":["рус","англ"],"lead_time_days":12,"rating":4.4,"reviews":26,"portfolio":"Небольшие деловые мероприятия до 80 человек: площадка, кейтеринг, оформление, фотограф."},{"id":"C34","name":"Дрон Хан","service":"Аэросъёмка","city":"Астана","price_min":50000,"price_max":180000,"unit":"за съёмочный день","styles":["панорамы","масштабно"],"formats":["аэросъёмка","облёт объекта"],"languages":["рус","каз"],"lead_time_days":4,"rating":4.6,"reviews":32,"portfolio":"Съёмка с дрона: облёты зданий, панорамы города, разрешения на полёты берут на себя."},{"id":"C35","name":"SkyView","service":"Аэросъёмка","city":"Шымкент","price_min":35000,"price_max":120000,"unit":"за съёмочный день","styles":["динамично"],"formats":["аэросъёмка","FPV"],"languages":["каз","рус"],"lead_time_days":3,"rating":4.3,"reviews":18,"portfolio":"FPV-дрон и классическая аэросъёмка для рекламы и репортажей на юге страны."},{"id":"C36","name":"Subtitle Lab","service":"Субтитры и перевод","city":"онлайн","price_min":8000,"price_max":40000,"unit":"за ролик","styles":["аккуратно","быстро"],"formats":["субтитры","перевод видео","расшифровка"],"languages":["каз","рус","англ"],"lead_time_days":2,"rating":4.7,"reviews":54,"portfolio":"Расшифровка и субтитры на трёх языках, вшитые или отдельным файлом, вычитка носителем."},{"id":"C37","name":"Karaganda Film","service":"Видеопродакшн","city":"Караганда","price_min":90000,"price_max":300000,"unit":"за ролик","styles":["простой","документально"],"formats":["корпоративное видео","репортаж"],"languages":["рус"],"lead_time_days":10,"rating":4.3,"reviews":15,"portfolio":"Региональный продакшн: корпоративные фильмы о заводах и производствах, съёмка на месте."},{"id":"C38","name":"Shymkent Media","service":"SMM и контент","city":"Шымкент","price_min":70000,"price_max":200000,"unit":"в месяц","styles":["местный колорит","живой"],"formats":["ведение инстаграм","рилс"],"languages":["каз","рус"],"lead_time_days":4,"rating":4.4,"reviews":29,"portfolio":"Ведение соцсетей для бизнеса юга: съёмка на месте, контент на казахском, работа с локальной аудиторией."},{"id":"C39","name":"Подкаст Плюс","service":"Подкасты","city":"Астана","price_min":80000,"price_max":250000,"unit":"за выпуск","styles":["разговорный","студийно"],"formats":["видеоподкаст","аудиоподкаст","нарезки"],"languages":["рус","каз"],"lead_time_days":7,"rating":4.6,"reviews":22,"portfolio":"Запись видеоподкастов на три камеры, чистый звук, монтаж выпуска и 5 вертикальных нарезок."},{"id":"C40","name":"Нарезка КЗ","service":"Подкасты","city":"онлайн","price_min":20000,"price_max":70000,"unit":"за выпуск","styles":["динамично","соцсети"],"formats":["нарезки","шортс","оформление подкаста"],"languages":["рус"],"lead_time_days":3,"rating":4.4,"reviews":37,"portfolio":"Делают из длинного подкаста 10 вертикальных нарезок с субтитрами и обложками."}],"requests":[{"id":"R01","customer":"Кофейня «Дала»","date":"23.09, 09:14","text":"Здравствуйте! Хочу видео для инстаграма, что-нибудь красивое и современное. У меня кофейня в Астане, хочу чтобы люди приходили. Бюджет пока не знаю, но не очень большой. Нужно побыстрее.","brief":{"service":"Видеомонтаж","city":"Астана","budget":null,"budget_unit":"за ролик","deadline_days":7,"formats":["рилс","вертикальное видео"],"styles":["динамично","тёплый","трендово"],"language":"рус","goal":"привести людей в кофейню и показать атмосферу","volume":"3–5 коротких вертикальных роликов"}},{"id":"R02","customer":"Стоматология «Ақ Тіс»","date":"23.09, 09:40","text":"Нужен логотип и фирменный стиль для новой стоматологической клиники в Алматы. Хотим минималистично и дорого выглядеть, без мультяшных зубов. Бюджет до 600 тысяч тенге, срок месяц.","brief":{"service":"Брендинг и логотип","city":"Алматы","budget":600000,"budget_unit":"за проект","deadline_days":30,"formats":["логотип","фирменный стиль"],"styles":["минимализм","премиум"],"language":"рус","goal":"запустить клинику с дорогим на вид брендом","volume":"знак, логотип, цвета и шрифты, базовые носители"}},{"id":"R03","customer":"ТОО «Астык Трейд»","date":"23.09, 10:02","text":"Нужен полноценный рекламный ролик для телевизора, красивый, как у больших брендов. Астана. Бюджет 50 тысяч тенге, надо за 5 дней.","brief":{"service":"Видеопродакшн","city":"Астана","budget":50000,"budget_unit":"за ролик","deadline_days":5,"formats":["рекламный ролик","имиджевое видео"],"styles":["кинематографично","премиум"],"language":"рус","goal":"телевизионная реклама уровня крупных брендов","volume":"один ролик"}},{"id":"R04","customer":"Онлайн-школа «Білім+»","date":"23.09, 10:21","text":"Сняли курс из 12 уроков на казахском, нужно смонтировать и сделать русские субтитры. Материал уже есть, лежит на диске. Бюджет 400 тысяч на всё, дедлайн две недели.","brief":{"service":"Видеомонтаж","city":"онлайн","budget":400000,"budget_unit":"за проект","deadline_days":14,"formats":["обучающий курс","субтитры"],"styles":["аккуратно","минимализм"],"language":"каз","goal":"выпустить онлайн-курс с субтитрами","volume":"12 уроков по 15–20 минут"}},{"id":"R05","customer":"Фитнес-клуб Energy","date":"23.09, 10:48","text":"Надо вести инстаграм. Сейчас ведём сами, получается плохо. Астана, хотим живой контент, бюджет 200 тысяч в месяц.","brief":{"service":"SMM и контент","city":"Астана","budget":200000,"budget_unit":"в месяц","deadline_days":null,"formats":["ведение инстаграм","сторис"],"styles":["живой","динамично"],"language":"рус","goal":"набрать подписчиков и записи на пробную тренировку","volume":null}},{"id":"R06","customer":"Частный бренд одежды","date":"23.09, 11:05","text":"Нужна съёмка новой коллекции. Алматы. Красиво, дневной свет, как в модных журналах. Сроки не горят.","brief":{"service":"Фотосъёмка","city":"Алматы","budget":null,"budget_unit":null,"deadline_days":null,"formats":["лукбук","портрет"],"styles":["тёплый свет","лайфстайл"],"language":"рус","goal":"снять лукбук новой коллекции","volume":null}},{"id":"R07","customer":"Застройщик «Сарыарка Дом»","date":"23.09, 11:19","text":"Нужен облёт нашего жилого комплекса дроном и визуализация двух планировок. Астана, бюджет 700 тысяч, три недели.","brief":{"service":"Аэросъёмка","city":"Астана","budget":700000,"budget_unit":"за проект","deadline_days":21,"formats":["аэросъёмка","облёт объекта"],"styles":["масштабно","реалистично"],"language":"рус","goal":"показать ЖК покупателям с воздуха и изнутри","volume":"облёт + 2 визуализации планировок"}},{"id":"R08","customer":"Юрист Ерлан А.","date":"23.09, 11:33","text":"Хочу запустить телеграм и снимать короткие видео про права предпринимателей. Не знаю с чего начать. Онлайн, готов платить 80 тысяч в месяц.","brief":{"service":"SMM и контент","city":"онлайн","budget":80000,"budget_unit":"в месяц","deadline_days":null,"formats":["контент-план","шортс"],"styles":["экспертный","простой"],"language":"рус","goal":"собрать аудиторию предпринимателей и получать заявки","volume":null}},{"id":"R09","customer":"IT-стартап Qoldau","date":"23.09, 11:52","text":"Нужен питч-дек для инвесторов на английском, 20 слайдов, строго и с инфографикой. Неделя. Бюджет 150 тысяч.","brief":{"service":"Графический дизайн","city":"онлайн","budget":150000,"budget_unit":"за презентацию","deadline_days":7,"formats":["презентация","питч-дек"],"styles":["деловой","строго","инфографика"],"language":"англ","goal":"привлечь инвестиции на раунде","volume":"20 слайдов"}},{"id":"R10","customer":"Ресторан «Достык»","date":"23.09, 12:10","text":"Открытие нового зала через месяц, нужно организовать мероприятие на 150 человек с национальным колоритом. Астана. Бюджет 2 миллиона.","brief":{"service":"Организация мероприятий","city":"Астана","budget":2000000,"budget_unit":"за мероприятие","deadline_days":30,"formats":["открытие","корпоратив"],"styles":["национальный колорит","масштабно"],"language":"каз","goal":"громко открыть новый зал ресторана","volume":"мероприятие на 150 человек"}},{"id":"R11","customer":"Магазин автозапчастей","date":"23.09, 12:31","text":"Надо 300 товаров снять на белом фоне для маркетплейса. Шымкент. Дёшево и быстро.","brief":{"service":"Фотосъёмка","city":"Шымкент","budget":null,"budget_unit":null,"deadline_days":3,"formats":["предметная съёмка","каталог"],"styles":["чистый фон","бюджетно"],"language":"рус","goal":"выложить товары на маркетплейс","volume":"300 товаров"}},{"id":"R12","customer":"Подкаст «Бизнес по-казахски»","date":"23.09, 12:48","text":"Записываем подкаст сами, нужны только вертикальные нарезки с субтитрами, по 10 штук с выпуска. Онлайн, 60 тысяч за выпуск.","brief":{"service":"Подкасты","city":"онлайн","budget":60000,"budget_unit":"за выпуск","deadline_days":5,"formats":["нарезки","шортс","субтитры"],"styles":["динамично","соцсети"],"language":"рус","goal":"продвигать подкаст короткими роликами","volume":"10 нарезок с каждого выпуска"}}],"examples":[{"title":"«Хочу что-нибудь для инстаграма»","text":"Здравствуйте! Хочу видео для инстаграма, что-нибудь красивое и современное. У меня кофейня в Астане, хочу чтобы люди приходили. Бюджет пока не знаю, но не очень большой. Нужно побыстрее.","ai_brief":{"service":"Видеомонтаж","city":"Астана","budget":null,"budget_unit":"за ролик","deadline_days":7,"formats":["рилс","вертикальное видео"],"styles":["динамично","тёплый","трендово"],"language":"рус","goal":"привести людей в кофейню в Астане и показать атмосферу заведения","volume":"серия коротких вертикальных роликов, ориентировочно 3–5 штук","assumptions":["«что-нибудь для инстаграма» — это вертикальные ролики (рилс), а не большой рекламный фильм","«побыстрее» истолковано как срок около недели","бюджет заказчик не назвал — это первое, что надо уточнить"],"source":"ai"},"ai_explanations":{"C05":"Поток коротких вертикальных роликов — ровно их формат, делают за 2 дня и по нижней цене рынка. Риск: шаблонный трендовый стиль, кофейня может выглядеть как все.","C02":"Контент-студия из Астаны, снимает и монтирует на месте — подойдёт, если нужно снять кофейню, а не смонтировать чужой материал. Риск: старт от 120 000 ₸, для «небольшого бюджета» может быть дорого.","C03":"Монтажёр-фрилансер, берёт сериями по 10 роликов и делает за 3 дня. Риск: только монтаж, снимать придётся самим.","C13":"Может взять весь инстаграм кофейни целиком, а не один ролик: контент-план, посты и сторис. Риск: это месячная подписка от 150 000 ₸, а не разовая работа.","C15":"Самый бюджетный вариант: простые рилсы из вашего же материала. Риск: невысокий рейтинг и простой уровень картинки.","C04":"Берёт длинные интервью и подкасты — пригодится, если кроме рилсов захотите снять большое интервью с владельцем кофейни. Риск: для коротких роликов это дороже и медленнее, чем нужно.","C39":"Студия видеоподкастов: если решите снимать разговорный формат прямо в кофейне, у них три камеры и чистый звук. Риск: к задаче «ролики для инстаграма» это относится только частью про вертикальные нарезки."}},{"title":"Логотип и стиль для стоматологии","text":"Нужен логотип и фирменный стиль для новой стоматологической клиники в Алматы. Хотим минималистично и дорого выглядеть, без мультяшных зубов. Бюджет до 600 тысяч тенге, срок месяц.","ai_brief":{"service":"Брендинг и логотип","city":"Алматы","budget":600000,"budget_unit":"за проект","deadline_days":30,"formats":["логотип","фирменный стиль"],"styles":["минимализм","премиум"],"language":"рус","goal":"запустить новую клинику с узнаваемым и дорогим на вид брендом","volume":"знак, логотип, цвета и шрифты, базовые носители","assumptions":["«дорого выглядеть» истолковано как премиальный минимализм","брендбук на 60 страниц скорее всего не нужен, хватит мини-гайдлайна"],"source":"ai"},"ai_explanations":{"C09":"Брендинговое агентство в Алматы, делает знак и брендбук в премиальном минимализме — попадание в задачу. Риск: их проекты стартуют от 400 000 ₸ и идут 30 дней, запаса по сроку нет.","C10":"Дизайнер с минималистичной геометрией, три варианта и мини-гайдлайн за 10 дней — вдвое дешевле и быстрее агентства. Риск: работает один, без исследования рынка.","C21":"Пригодится, если после логотипа сразу нужен сайт клиники в том же чистом стиле. Риск: это веб-дизайн, а не брендинг.","C11":"Сможет закрыть полиграфию и оформление клиники после утверждения стиля. Риск: их стиль яркий и с орнаментами — это против «минималистично».","C27":"Нарисуют иконки услуг под фирменные цвета. Риск: это дополнение к брендингу, а не сам брендинг.","C26":"Авторские иллюстрации пригодятся, если захотите узнаваемую графику в интерьере клиники и в соцсетях. Риск: тёплый акварельный стиль спорит с запросом на премиальный минимализм."}},{"title":"Подрядчик не по бюджету","text":"Нужен полноценный рекламный ролик для телевизора, красивый, как у больших брендов. Астана. Бюджет 50 тысяч тенге, надо за 5 дней.","ai_brief":{"service":"Видеопродакшн","city":"Астана","budget":50000,"budget_unit":"за ролик","deadline_days":5,"formats":["рекламный ролик","имиджевое видео"],"styles":["кинематографично","премиум"],"language":"рус","goal":"сделать телевизионную рекламу уровня крупных брендов","volume":"один рекламный ролик","assumptions":["запрос внутренне противоречив: уровень «как у больших брендов» и бюджет 50 000 ₸ не сходятся","за 5 дней полноценный продакшн со светом и цветокоррекцией не делается"],"source":"ai"},"ai_explanations":{"C02":"Ближайшая реалистичная точка входа: съёмочный день от 120 000 ₸ и сдача за неделю. Риск: это в два с лишним раза выше вашего бюджета, кинематографичного ТВ-ролика за эти деньги не будет.","C37":"Региональный продакшн с ценой от 90 000 ₸ — самый дешёвый настоящий продакшн в базе. Риск: Караганда, документальный стиль и срок 10 дней вместо 5.","C01":"Именно они делают ролики «как у больших брендов»: свет, два оператора, цветокор. Риск: от 250 000 ₸ и 14 дней — в пять раз выше бюджета и втрое дольше срока.","C03":"Уложится в 50 000 ₸ и в 3 дня, если у вас уже есть отснятый материал. Риск: это монтаж, съёмки не будет.","C05":"За 15 000–45 000 ₸ сделают вертикальный ролик для соцсетей вместо телевизионного. Риск: другой формат и другой уровень картинки.","C34":"За ваши 50 000 ₸ реально снять объект с дрона: картинка выйдет масштабной, хоть это и не телереклама. Риск: это съёмка с воздуха, а не рекламный ролик с актёрами и сценарием.","C40":"Уложится в бюджет, если делать короткие вертикальные нарезки из уже отснятого материала. Риск: совсем другой формат — вместо ТВ-ролика получите ролики для соцсетей."}}]}</script>
+<script>
+const DB = JSON.parse(document.getElementById("db").textContent);
+const CONTRACTORS = DB.contractors, REQUESTS = DB.requests, EXAMPLES = DB.examples;
+
+const RELATED = {
+  "Видеопродакшн":["Видеомонтаж","Аэросъёмка","Подкасты","Фотосъёмка"],
+  "Видеомонтаж":["Видеопродакшн","Моушн-дизайн","Субтитры и перевод","Подкасты"],
+  "Фотосъёмка":["Видеопродакшн","Аренда студии","3D и визуализация"],
+  "Брендинг и логотип":["Графический дизайн","Веб-дизайн и сайты","Иллюстрация"],
+  "Графический дизайн":["Брендинг и логотип","Иллюстрация","Моушн-дизайн"],
+  "SMM и контент":["Таргетированная реклама","Копирайтинг","Видеомонтаж","Фотосъёмка"],
+  "Таргетированная реклама":["SMM и контент","Копирайтинг"],
+  "Копирайтинг":["SMM и контент","Субтитры и перевод"],
+  "Веб-дизайн и сайты":["Брендинг и логотип","Графический дизайн"],
+  "Моушн-дизайн":["Видеомонтаж","Графический дизайн","3D и визуализация"],
+  "Озвучка и звук":["Видеомонтаж","Подкасты"],
+  "Иллюстрация":["Графический дизайн","Брендинг и логотип"],
+  "3D и визуализация":["Моушн-дизайн","Фотосъёмка"],
+  "Аренда студии":["Фотосъёмка","Видеопродакшн","Подкасты"],
+  "Организация мероприятий":["Фотосъёмка","Видеопродакшн"],
+  "Аэросъёмка":["Видеопродакшн","3D и визуализация"],
+  "Субтитры и перевод":["Видеомонтаж","Копирайтинг"],
+  "Подкасты":["Видеомонтаж","Озвучка и звук","Аренда студии"]
+};
+const SERVICE_KEYWORDS = {
+  "Видеопродакшн":["снять видео","видеосъёмка","видеосъемка","продакшн","рекламный ролик","имиджевое видео","съёмка ролика","бейне түсір","видео түсір","жарнама ролик","түсірілім","бейнеролик"],
+  "Видеомонтаж":["монтаж","смонтировать","склеить","нарезать видео","рилс","reels","шортс","бейнемонтаж","монтаждау","қию"],
+  "Фотосъёмка":["фото","фотограф","фотосессия","предметная съёмка","каталог","фотосурет","суретке түсір"],
+  "Брендинг и логотип":["логотип","лого","брендинг","фирменный стиль","брендбук","айдентика","фирмалық стиль"],
+  "Графический дизайн":["макет","полиграфия","баннер","презентация","листовка","афиша"],
+  "SMM и контент":["смм","smm","соцсети","инстаграм","instagram","вести аккаунт","контент-план","әлеуметтік желі","парақша жүргіз"],
+  "Таргетированная реклама":["таргет","реклама в инстаграм","трафик","лиды","заявки","жарнама беру"],
+  "Копирайтинг":["текст","копирайт","статья","сценарий","рассылка","мәтін жаз","мақала жаз"],
+  "Веб-дизайн и сайты":["сайт","лендинг","landing","интернет-магазин","веб","сайт жасау","сайт құру"],
+  "Моушн-дизайн":["анимация","моушн","motion","инфографика","анимационный ролик"],
+  "Озвучка и звук":["озвучка","диктор","звук","сведение","дауыстандыру","дыбыстау"],
+  "Иллюстрация":["иллюстрац","рисунок","персонаж","иконки","сурет салу"],
+  "3D и визуализация":["3d","3д","визуализац","рендер"],
+  "Аренда студии":["студи","павильон","циклорама","арендовать","студия жалға"],
+  "Организация мероприятий":["мероприят","ивент","event","корпоратив","форум","іс-шара","той"],
+  "Аэросъёмка":["дрон","аэросъёмка","аэросъемка","с воздуха","квадрокоптер","ұшқышсыз"],
+  "Субтитры и перевод":["субтитры","перевод","расшифровк","субтитр","аудар"],
+  "Подкасты":["подкаст"]
+};
+const CITY_KEYWORDS = {
+  "Астана":["астан","нур-султан"],"Алматы":["алмат"],"Шымкент":["шымкент"],
+  "Караганда":["караганд","қараған"],
+  "онлайн":["онлайн","удалённо","удаленно","неважно где","дистанционно","қашықтан"]
+};
+const STYLE_WORDS = ["динамично","минимализм","премиум","кинематографично","яркий","бюджетно","быстро","трендово","деловой","тёплый","живой"];
+const FORMAT_WORDS = ["рилс","шортс","лендинг","логотип","презентация","подкаст","интервью","каталог","портрет","репортаж","субтитры"];
+const QUESTIONS = {
+  service:"Какая именно услуга нужна: съёмка, монтаж, дизайн, реклама, что-то другое?",
+  city:"В каком городе нужен подрядчик? Или подойдёт работа онлайн?",
+  budget:"Какой у вас бюджет в тенге? Достаточно вилки «от и до».",
+  deadline_days:"К какой дате нужен результат? Через сколько дней?",
+  formats:"В каком формате нужен результат: например, ролик для инстаграма, логотип, лендинг?",
+  goal:"Для чего это нужно: продажи, узнаваемость, обучение, отчёт?",
+  volume:"Какой объём работы: сколько роликов, страниц, макетов?"
+};
+const IMPORTANT = ["service","city","budget","deadline_days","formats","goal","volume"];
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money = v => v ? Math.round(v).toLocaleString("ru-RU").replace(/ /g," ") + " ₸" : "не указан";
+const plural = (n,a,b,c) => { n=Math.abs(n); if([11,12,13,14].includes(n%100)) return c;
+  const l=n%10; return l===1?a:(l>=2&&l<=4?b:c); };
+
+function findBudget(t){
+  const nums=[]; const re=/(\d+(?:[.,]\d+)?)\s*(млн|миллион|тыс|тысяч|мың|к\b|k\b)?/g; let m;
+  while((m=re.exec(t))!==null){
+    let v=parseFloat(m[1].replace(",",".")); const s=m[2];
+    if(s==="млн"||s==="миллион") v*=1e6;
+    else if(s==="тыс"||s==="тысяч"||s==="мың"||s==="к"||s==="k") v*=1e3;
+    if(v>=5000) nums.push(Math.round(v));
+  }
+  return nums.length?Math.max(...nums):null;
+}
+function findDeadline(t){
+  let m=t.match(/(\d+)\s*(дн|день|дня|дней|күн)/); if(m) return Math.max(1,+m[1]);
+  m=t.match(/(\d+)\s*(недел|апта)/); if(m) return Math.max(1,+m[1])*7;
+  m=t.match(/(\d+)\s*(месяц|ай\b)/); if(m) return Math.max(1,+m[1])*30;
+  if(/срочно|завтра|вчера|шұғыл/.test(t)) return 2;
+  if(/недел|апта/.test(t)) return 7;
+  if(/месяц/.test(t)) return 30;
+  return null;
+}
+function parseOffline(text){
+  const t=text.toLowerCase();
+  let service=null,best=0;
+  for(const [name,keys] of Object.entries(SERVICE_KEYWORDS)){
+    const hits=keys.filter(k=>t.includes(k)).length;
+    if(hits>best){service=name;best=hits;}
+  }
+  let city=null;
+  for(const [name,keys] of Object.entries(CITY_KEYWORDS)) if(keys.some(k=>t.includes(k))){city=name;break;}
+  const kaz=/[әғқңөұүһі]/.test(t);
+  let language=null;
+  if(/казах|қазақ|\sказ\s/.test(t)||kaz) language="каз";
+  else if(/англ/.test(t)) language="англ";
+  else if(/русск/.test(t)) language="рус";
+  return {service,city,budget:findBudget(t),budget_unit:null,deadline_days:findDeadline(t),
+    formats:FORMAT_WORDS.filter(w=>t.includes(w)),styles:STYLE_WORDS.filter(w=>t.includes(w.split(" ")[0])),
+    language,goal:null,volume:null};
+}
+const filled = v => !(v===null||v===undefined||v===""||v===0||(Array.isArray(v)&&!v.length));
+const missing = b => IMPORTANT.filter(f=>!filled(b[f]));
+const completeness = b => Math.round(IMPORTANT.filter(f=>filled(b[f])).length/IMPORTANT.length*100);
+const isVague = b => !["service","city","budget","deadline_days","formats","goal"].some(f=>filled(b[f]));
+
+function overlap(words,hay){hay=hay.toLowerCase();
+  return (words||[]).filter(w=>w&&String(w).length>=4&&hay.includes(String(w).toLowerCase())).length;}
+
+function budgetPoints(budget,c){
+  if(!budget) return [12,null,"unknown","Бюджет не назван — до разговора о работе надо его выяснить."];
+  if(budget>c.price_max) return [22,`бюджета хватает с запасом (их потолок ${money(c.price_max)})`,"above",
+    `Бюджет ${money(budget)} выше вашего потолка (${money(c.price_max)}). Можно предложить расширенный объём.`];
+  if(budget>=c.price_min) return [25,`бюджет попадает в вилку ${money(c.price_min)} – ${money(c.price_max)}`,"fits",
+    `Бюджет ${money(budget)} попадает в вашу вилку ${money(c.price_min)} – ${money(c.price_max)}.`];
+  const gap=(c.price_min-budget)/c.price_min;
+  if(gap<=0.2) return [12,`чуть ниже их минимума (${money(c.price_min)}) — можно торговаться`,"near",
+    `Бюджет ${money(budget)} чуть ниже вашего минимума (${money(c.price_min)}). Реально сойтись, если урезать объём.`];
+  if(gap<=0.5) return [4,`бюджет заметно ниже их минимума (${money(c.price_min)})`,"low",
+    `Бюджет ${money(budget)} не тянет: ваш минимум ${money(c.price_min)}. Разница ${money(c.price_min-budget)}.`];
+  return [0,`бюджета не хватает: у них от ${money(c.price_min)}`,"low",
+    `Бюджет ${money(budget)} не тянет: ваш минимум ${money(c.price_min)}. Разница ${money(c.price_min-budget)}.`];
+}
+
+function score(brief,c){
+  let s=0; const reasons=[],risks=[]; let matched=true;
+  const service=brief.service;
+  if(service && c.service===service){s+=40;reasons.push(`профиль совпадает: ${c.service}`);}
+  else if(service && (RELATED[service]||[]).includes(c.service)){s+=18;reasons.push(`смежная услуга: ${c.service} — может закрыть часть задачи`);}
+  else if(service){matched=false;risks.push(`другой профиль: ${c.service}, а нужен «${service}»`);}
+  else s+=15;
+
+  const [bp,bnote]=budgetPoints(brief.budget,c);
+  s+=bp; if(bnote){ (bp>=20?reasons:risks).push(bnote); }
+
+  if(!brief.city) s+=8;
+  else if(c.city===brief.city){s+=15;reasons.push(`работает в городе ${c.city}`);}
+  else if(c.city==="онлайн"||brief.city==="онлайн"){s+=11;reasons.push("работает онлайн");}
+  else {s+=2;risks.push(`находится в другом городе (${c.city})`);}
+
+  if(brief.formats&&brief.formats.length){
+    const h=overlap(brief.formats,c.formats.join(" ")+" "+c.portfolio);
+    if(h){s+=Math.min(10,h*5);reasons.push("делает нужный формат: "+c.formats.slice(0,2).join(", "));}
+  } else s+=5;
+
+  if(brief.styles&&brief.styles.length){
+    const h=overlap(brief.styles,c.styles.join(" ")+" "+c.portfolio);
+    if(h){s+=Math.min(10,h*5);reasons.push("стиль близок: "+c.styles.slice(0,2).join(", "));}
+  } else s+=5;
+
+  if(!brief.deadline_days) s+=5;
+  else if(c.lead_time_days<=brief.deadline_days){s+=10;reasons.push(`успевает: обычный срок ${c.lead_time_days} дн.`);}
+  else risks.push(`может не успеть: их срок ${c.lead_time_days} дн., а нужно за ${brief.deadline_days}`);
+
+  if(brief.language){
+    if(c.languages.includes(brief.language)){s+=5;reasons.push(`работает на языке: ${brief.language}`);}
+    else risks.push(`не заявляют язык «${brief.language}»`);
+  } else s+=3;
+
+  s+=Math.max(0,(c.rating-4)*7)+Math.min(3,c.reviews/30);
+  if(c.rating>=4.7) reasons.push(`рейтинг ${c.rating} по ${c.reviews} отзывам`);
+
+  return {score:Math.round(Math.min(s,matched?100:45)),reasons,risks};
+}
+const match=(brief,n=5)=>CONTRACTORS.map(c=>({c,...score(brief,c)}))
+  .sort((a,b)=>b.score-a.score||b.c.rating-a.c.rating).slice(0,n);
+
+/* ---------- метрики рынка, считаются из данных ---------- */
+function marketStats(){
+  const before=REQUESTS.map(r=>completeness(parseOffline(r.text)));
+  const after=REQUESTS.map(r=>completeness(r.brief));
+  const avg=a=>Math.round(a.reduce((x,y)=>x+y,0)/a.length);
+  let pairs=0,dead=0;
+  for(const c of CONTRACTORS) for(const r of REQUESTS){
+    if(score(r.brief,c).score<60) continue;
+    pairs++;
+    const code=budgetPoints(r.brief.budget,c)[2];
+    if(code!=="fits"&&code!=="above") dead++;
+  }
+  return {before:avg(before),after:avg(after),lift:avg(after)-avg(before),
+    wasted:Math.round(dead/pairs*100),pairs,dead,
+    noBudget:REQUESTS.filter(r=>!r.brief.budget).length,total:REQUESTS.length};
+}
+const M=marketStats();
+document.getElementById("stats").innerHTML=`
+  <div class="stat"><div class="k">Запрос как есть</div><div class="v">${M.before}%</div>
+    <div class="n">столько заказчик заполняет сам</div></div>
+  <div class="stat"><div class="k">После разбора</div><div class="v">${M.after}%</div>
+    <div class="n">+${M.lift} ${plural(M.lift,"пункт","пункта","пунктов")} к полноте брифа</div></div>
+  <div class="stat"><div class="k">Тупик по бюджету</div><div class="v">${M.wasted}%</div>
+    <div class="n">переписок, которые ничем не кончатся</div></div>`;
+
+/* ---------- вкладка заказчика ---------- */
+const reqEl=document.getElementById("req"), outEl=document.getElementById("out");
+document.getElementById("examples").innerHTML=EXAMPLES
+  .map((e,i)=>`<button class="chip" data-ex="${i}">${esc(e.title)}</button>`).join("");
+document.getElementById("examples").addEventListener("click",e=>{
+  const b=e.target.closest("[data-ex]"); if(!b) return;
+  reqEl.value=EXAMPLES[+b.dataset.ex].text; run();
+});
+reqEl.value=EXAMPLES[0].text;
+
+function briefText(b,src){
+  const val=k=>{const v=b[k]; if(!filled(v)) return "не указано";
+    return Array.isArray(v)?v.join(", "):String(v);};
+  const gaps=missing(b);
+  const names={service:"услуга",city:"город",budget:"бюджет",deadline_days:"срок",
+    formats:"формат работы",goal:"цель",volume:"объём"};
+  return ["БРИФ НА РАБОТУ","",
+    `1. Услуга: ${val("service")}`,`2. Что нужно сделать: ${filled(b.goal)?b.goal:"уточняется"}`,
+    `3. Объём: ${val("volume")}`,`4. Формат результата: ${val("formats")}`,
+    `5. Стиль и настроение: ${val("styles")}`,`6. Язык материалов: ${val("language")}`,
+    `7. Город / формат работы: ${val("city")}`,`8. Бюджет: ${money(b.budget)}`,
+    `9. Срок: ${b.deadline_days?b.deadline_days+" дн.":"не указан"}`,
+    "","Исходный запрос заказчика:",`«${src.trim()}»`,
+    ...(gaps.length?["",`Заказчик пока не определился по пунктам: ${gaps.map(g=>names[g]).join(", ")}.`]:[])
+  ].join("\n");
+}
+
+function run(){
+  const text=reqEl.value.trim();
+  if(!text){outEl.innerHTML=`<div class="note ask">Напишите запрос или выберите готовый пример.</div>`;return;}
+  const ex=EXAMPLES.find(e=>e.text.trim()===text);
+  const brief=ex?structuredClone(ex.ai_brief):parseOffline(text);
+  const says=ex?ex.ai_explanations:{};
+  const res=match(brief,5), done=completeness(brief), qs=missing(brief);
+
+  const cards=res.map((r,i)=>`
+    <article class="card">
+      <div class="chead">
+        <div><h3>${i+1}. ${esc(r.c.name)}</h3>
+          <div class="meta">${esc(r.c.service)} · ${esc(r.c.city)} ·
+          ${money(r.c.price_min).replace(" ₸","")}–${money(r.c.price_max)} ${esc(r.c.unit)} ·
+          срок ${r.c.lead_time_days} дн. · ★ ${r.c.rating}</div></div>
+        <div class="score">${r.score}%</div>
+      </div>
+      <div class="bar"><i style="width:${r.score}%"></i></div>
+      ${says[r.c.id]?`<p class="say">${esc(says[r.c.id])}</p>`:""}
+      <p class="port">${esc(r.c.portfolio)}</p>
+      <div class="why">
+        ${r.reasons.length?`<div><div class="k">Почему подходит</div><ul>${r.reasons.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+        ${r.risks.length?`<div><div class="k">На что обратить внимание</div><ul>${r.risks.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+      </div>
+    </article>`).join("");
+
+  outEl.innerHTML=`
+    <div class="brief">
+      <div class="label" style="margin:0">Бриф, собранный из запроса — заполнен на ${done}%</div>
+      <div class="meter"><i style="width:${done}%"></i></div>
+      <div class="fields">
+        <div class="field"><div class="k">Услуга</div><div class="v">${esc(brief.service||"—")}</div></div>
+        <div class="field"><div class="k">Город</div><div class="v">${esc(brief.city||"—")}</div></div>
+        <div class="field"><div class="k">Бюджет</div><div class="v">${money(brief.budget)}</div></div>
+        <div class="field"><div class="k">Срок</div><div class="v">${brief.deadline_days?brief.deadline_days+" дн.":"не указан"}</div></div>
+      </div>
+      <div class="rows">
+        <div><b>Цель:</b> ${esc(brief.goal||"не сформулирована")}</div>
+        <div><b>Объём:</b> ${esc(brief.volume||"не указан")}</div>
+        <div><b>Формат:</b> ${esc((brief.formats||[]).join(", ")||"не указан")}</div>
+        <div><b>Стиль:</b> ${esc((brief.styles||[]).join(", ")||"не указан")}</div>
+      </div>
+      ${brief.assumptions&&brief.assumptions.length?`<div class="guessed"><b>Что приложение домыслило за заказчика:</b>
+        <ul>${brief.assumptions.map(a=>`<li>${esc(a)}</li>`).join("")}</ul></div>`:""}
+      ${qs.length?`<div class="note ask"><b>Это надо уточнить до начала работы:</b>
+        <ol>${qs.slice(0,4).map(q=>`<li>${esc(QUESTIONS[q])}</li>`).join("")}</ol></div>`
+        :`<div class="note ok">Бриф полный — подрядчику можно отправлять как есть.</div>`}
+      <details><summary>Показать готовый бриф для отправки</summary><pre>${esc(briefText(brief,text))}</pre></details>
+    </div>
+    ${isVague(brief)?`<div class="note bad"><b>Из этого запроса не удалось понять ничего конкретного</b> —
+      ни услугу, ни город, ни бюджет, ни срок. Список ниже собран по рейтингу, а не по вашей задаче.
+      Напишите хотя бы одним предложением, что нужно сделать.</div>`:""}
+    <p class="label" style="margin-top:22px">Подобранные подрядчики</p>
+    ${cards}`;
+}
+document.getElementById("run").addEventListener("click",run);
+
+/* ---------- вкладка подрядчика ---------- */
+const meEl=document.getElementById("me"), inboxEl=document.getElementById("inbox");
+meEl.innerHTML=CONTRACTORS.map((c,i)=>
+  `<option value="${i}"${c.id==="C02"?" selected":""}>${esc(c.name)} — ${esc(c.service)}, ${esc(c.city)}</option>`).join("");
+
+function deadlineVerdict(b,c){
+  if(!b.deadline_days) return ["w","Срок не назван."];
+  return c.lead_time_days<=b.deadline_days
+    ? ["g",`Успеваете: ваш срок ${c.lead_time_days} дн., у заказчика есть ${b.deadline_days}.`]
+    : ["c",`Не успеваете: ваш срок ${c.lead_time_days} дн., а заказчик просит за ${b.deadline_days}.`];
+}
+function reply(r,c,mode){
+  const b=r.brief, hi=`Здравствуйте, ${r.customer}!`, srv=b.service||"задачу";
+  const qs=missing(b).filter(f=>QUESTIONS[f]).slice(0,5);
+  if(mode==="clarify") return [hi,"",
+    `Спасибо за заявку. Чтобы назвать точную цену и срок по задаче «${srv}», мне не хватает деталей:`,"",
+    ...qs.map((q,i)=>`${i+1}. ${QUESTIONS[q]}`),"",
+    `Как ответите — пришлю смету. Ориентир: ${money(c.price_min)} – ${money(c.price_max)} ${c.unit}, обычный срок ${c.lead_time_days} дн.`,
+    "",c.name].join("\n");
+  if(mode==="decline") return [hi,"",
+    `Спасибо за заявку. По задаче «${srv}» честно скажу сразу: в ${money(b.budget)} я не уложусь. Мои работы этого типа стоят от ${money(c.price_min)} ${c.unit} — за меньшую сумму получится хуже, чем вы ожидаете, и это будет неприятно обоим.`,
+    "","Что можно сделать в вашем бюджете:",
+    "— взять меньший объём работы и сделать его нормально;",
+    "— упростить формат (например, работа с вашим материалом вместо полного продакшна);",
+    "— вернуться к задаче, когда бюджет вырастет.","",
+    "Если подходит один из вариантов — напишите, обсудим.","",c.name].join("\n");
+  return [hi,"","Задача понятна, берусь. Коротко, как я её понял:","",
+    `— Услуга: ${srv}`,`— Объём: ${b.volume||"уточним на созвоне"}`,
+    `— Формат: ${(b.formats||[]).join(", ")||"уточним"}`,
+    `— Срок: ${b.deadline_days?b.deadline_days+" дн.":"обсудим"} (мой обычный — ${c.lead_time_days} дн.)`,
+    `— Бюджет: ${money(b.budget)}`,"",
+    "Если всё верно — подтвердите, и я ставлю задачу в график.","",c.name].join("\n");
+}
+function renderInbox(){
+  const c=CONTRACTORS[+meEl.value];
+  const rows=REQUESTS.map(r=>{
+    const sc=score(r.brief,c);
+    const [,,code,btext]=budgetPoints(r.brief.budget,c);
+    const [dcode,dtext]=deadlineVerdict(r.brief,c);
+    return {r,sc,code,btext,dcode,dtext,done:completeness(r.brief)};
+  }).filter(x=>x.sc.score>=50).sort((a,b)=>b.sc.score-a.sc.score);
+
+  const fits=rows.filter(x=>x.code==="fits"||x.code==="above").length;
+  const bcls={fits:"g",above:"g",near:"w",unknown:"w",low:"c"};
+  const mode=x=>x.code==="low"?"decline":(x.done<85?"clarify":"accept");
+  const modeName={accept:"Взять в работу",clarify:"Уточнить детали",decline:"Отказать: не мой бюджет"};
+
+  inboxEl.innerHTML=`
+    <div class="brief" style="margin-top:14px">
+      <div class="fields">
+        <div class="field"><div class="k">Услуга</div><div class="v">${esc(c.service)}</div></div>
+        <div class="field"><div class="k">Город</div><div class="v">${esc(c.city)}</div></div>
+        <div class="field"><div class="k">Ваша вилка</div><div class="v">${money(c.price_min).replace(" ₸","")}–${money(c.price_max)}</div></div>
+        <div class="field"><div class="k">Обычный срок</div><div class="v">${c.lead_time_days} дн.</div></div>
+      </div>
+    </div>
+    <p class="label" style="margin-top:22px">Входящие заявки — подходят вам ${rows.length} из ${REQUESTS.length}, из них по бюджету ${fits}</p>
+    ${rows.map(x=>`
+      <article class="card ${x.code==="low"?"flag":(x.code==="fits"||x.code==="above"?"okflag":"warnflag")}">
+        <div class="chead">
+          <div><h3>${esc(x.r.customer)}</h3>
+            <div class="meta">${esc(x.r.brief.service||"—")} · ${esc(x.r.brief.city||"—")} ·
+            бюджет ${money(x.r.brief.budget)} · ${x.r.date}</div></div>
+          <div class="score">${x.sc.score}%</div>
+        </div>
+        <p class="quote">${esc(x.r.text)}</p>
+        <div class="lights">
+          <div class="light ${bcls[x.code]}"><b>Бюджет</b>${esc(x.btext)}</div>
+          <div class="light ${x.dcode}"><b>Срок</b>${esc(x.dtext)}</div>
+          <div class="light ${x.done>=85?"g":"w"}"><b>Бриф ${x.done}%</b>${x.done>=85?"Можно оценивать сразу.":"Не хватает деталей."}</div>
+        </div>
+        <details><summary>Черновик ответа — ${modeName[mode(x)]}</summary><pre>${esc(reply(x.r,c,mode(x)))}</pre></details>
+      </article>`).join("")}`;
+}
+meEl.addEventListener("change",renderInbox);
+
+/* ---------- вкладки ---------- */
+const tabs=[["tab-c","panel-c"],["tab-p","panel-p"]];
+tabs.forEach(([t,p])=>document.getElementById(t).addEventListener("click",()=>{
+  tabs.forEach(([t2,p2])=>{
+    const on=t2===t;
+    document.getElementById(t2).setAttribute("aria-selected",String(on));
+    document.getElementById(p2).hidden=!on;
+  });
+}));
+
+run();
+renderInbox();
+</script>
