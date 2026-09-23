@@ -1,0 +1,23 @@
+# Секреты
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# ОС и редакторы
+.DS_Store
+.idea/
+.vscode/
+
+# Временные файлы
+*.log
+.streamlit/secrets.toml
