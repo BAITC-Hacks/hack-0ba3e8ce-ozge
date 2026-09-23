@@ -85,6 +85,28 @@ SERVICE_KEYWORDS = {
     "Подкасты": ["подкаст"],
 }
 
+# Смежные услуги: кто может закрыть задачу, если точного профиля нет
+RELATED_SERVICES = {
+    "Видеопродакшн": ["Видеомонтаж", "Аэросъёмка", "Подкасты", "Фотосъёмка"],
+    "Видеомонтаж": ["Видеопродакшн", "Моушн-дизайн", "Субтитры и перевод", "Подкасты"],
+    "Фотосъёмка": ["Видеопродакшн", "Аренда студии", "3D и визуализация"],
+    "Брендинг и логотип": ["Графический дизайн", "Веб-дизайн и сайты", "Иллюстрация"],
+    "Графический дизайн": ["Брендинг и логотип", "Иллюстрация", "Моушн-дизайн"],
+    "SMM и контент": ["Таргетированная реклама", "Копирайтинг", "Видеомонтаж", "Фотосъёмка"],
+    "Таргетированная реклама": ["SMM и контент", "Копирайтинг"],
+    "Копирайтинг": ["SMM и контент", "Субтитры и перевод"],
+    "Веб-дизайн и сайты": ["Брендинг и логотип", "Графический дизайн"],
+    "Моушн-дизайн": ["Видеомонтаж", "Графический дизайн", "3D и визуализация"],
+    "Озвучка и звук": ["Видеомонтаж", "Подкасты"],
+    "Иллюстрация": ["Графический дизайн", "Брендинг и логотип"],
+    "3D и визуализация": ["Моушн-дизайн", "Фотосъёмка"],
+    "Аренда студии": ["Фотосъёмка", "Видеопродакшн", "Подкасты"],
+    "Организация мероприятий": ["Фотосъёмка", "Видеопродакшн"],
+    "Аэросъёмка": ["Видеопродакшн", "3D и визуализация"],
+    "Субтитры и перевод": ["Видеомонтаж", "Копирайтинг"],
+    "Подкасты": ["Видеомонтаж", "Озвучка и звук", "Аренда студии"],
+}
+
 CITY_KEYWORDS = {
     "Астана": ["астан", "нур-султан"],
     "Алматы": ["алмат"],
@@ -243,7 +265,7 @@ def _budget_score(brief_budget, c):
 def _text_overlap(words, haystack):
     """Сколько слов из списка встречается в тексте."""
     h = haystack.lower()
-    return sum(1 for w in words if w and w.lower() in h)
+    return sum(1 for w in words if w and len(w) >= 4 and w.lower() in h)
 
 
 def score_contractor(brief, c):
@@ -251,19 +273,19 @@ def score_contractor(brief, c):
     score = 0
     reasons = []
     risks = []
+    service_matched = True  # профиль подрядчика совпал с нужной услугой
 
     # 1. Услуга — до 40 баллов
     service = brief.get("service")
     if service and c["service"] == service:
         score += 40
         reasons.append(f"профиль совпадает: {c['service']}")
+    elif service and c["service"] in RELATED_SERVICES.get(service, []):
+        score += 18
+        reasons.append(f"смежная услуга: {c['service']} — может закрыть часть задачи")
     elif service:
-        haystack = c["portfolio"] + " " + " ".join(c["formats"]) + " " + c["service"]
-        if _text_overlap(service.lower().split(), haystack):
-            score += 18
-            reasons.append(f"смежная услуга: {c['service']}")
-        else:
-            score += 0
+        service_matched = False
+        risks.append(f"другой профиль: {c['service']}, а нужен «{service}»")
     else:
         score += 15  # услуга не названа — не наказываем никого
 
@@ -338,7 +360,10 @@ def score_contractor(brief, c):
     if c["rating"] >= 4.7:
         reasons.append(f"рейтинг {c['rating']} по {c['reviews']} отзывам")
 
-    return round(min(score, 100)), reasons, risks
+    # Если профиль вообще не тот, подрядчик не может быть в топе,
+    # даже когда сходятся город, бюджет и срок.
+    ceiling = 45 if not service_matched else 100
+    return round(min(score, ceiling)), reasons, risks
 
 
 def match(brief, contractors, top_n=5):
@@ -399,3 +424,161 @@ def render_brief_text(brief, original_request=""):
         lines += ["", "Заказчик пока не определился по пунктам: " +
                   ", ".join(HUMAN_FIELD_NAMES.get(g, g) for g in gaps) + "."]
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Сторона подрядчика: входящие заявки, проверка бюджета, ответы заказчику
+# --------------------------------------------------------------------------
+
+def load_requests():
+    """Читает входящие заявки заказчиков из data/requests.json."""
+    with open(DATA_DIR / "requests.json", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def money(value):
+    """Форматирует сумму: 250000 -> «250 000 ₸»."""
+    if not value:
+        return "не указан"
+    return f"{int(value):,} ₸".replace(",", " ")
+
+
+def budget_verdict(brief, c):
+    """Проверяет, по бюджету ли заказчик для этого подрядчика.
+
+    Возвращает (код, текст). Коды: fits / above / near / low / unknown.
+    """
+    budget = brief.get("budget")
+    low, high = c["price_min"], c["price_max"]
+
+    if not budget:
+        return "unknown", "Бюджет не назван — до разговора о работе надо его выяснить."
+    if budget > high:
+        return "above", f"Бюджет {money(budget)} выше вашего потолка ({money(high)}). Можно предложить расширенный объём."
+    if budget >= low:
+        return "fits", f"Бюджет {money(budget)} попадает в вашу вилку {money(low)} – {money(high)}."
+    if (low - budget) / low <= 0.2:
+        return "near", f"Бюджет {money(budget)} чуть ниже вашего минимума ({money(low)}). Реально сойтись, если урезать объём."
+    return "low", f"Бюджет {money(budget)} не тянет: ваш минимум {money(low)}. Разница {money(low - budget)}."
+
+
+def deadline_verdict(brief, c):
+    """Успевает ли подрядчик к сроку заказчика."""
+    deadline = brief.get("deadline_days")
+    if not deadline:
+        return "unknown", "Срок не назван."
+    if c["lead_time_days"] <= deadline:
+        return "fits", f"Успеваете: ваш обычный срок {c['lead_time_days']} дн., у заказчика есть {deadline}."
+    return "late", f"Не успеваете: ваш срок {c['lead_time_days']} дн., а заказчик просит за {deadline}."
+
+
+def brief_quality_label(brief):
+    """Словесная оценка качества брифа."""
+    done = brief_completeness(brief)
+    if done >= 85:
+        return "Полный бриф", "Можно оценивать работу сразу."
+    if done >= 60:
+        return "Бриф неполный", "Пары ответов не хватает для оценки."
+    return "Сырой запрос", "Без уточнений оценивать нельзя."
+
+
+def draft_reply(request, c, mode):
+    """Готовит текст ответа заказчику. Работает без ИИ.
+
+    mode: accept — беру в работу, clarify — уточняю, decline — не мой бюджет.
+    """
+    brief = request["brief"]
+    customer = request.get("customer", "")
+    greeting = f"Здравствуйте, {customer}!" if customer else "Здравствуйте!"
+    service = brief.get("service") or "задачу"
+    questions = follow_up_questions(brief, limit=5)
+
+    if mode == "clarify":
+        body = [
+            greeting,
+            "",
+            f"Спасибо за заявку. Чтобы назвать точную цену и срок по задаче «{service}», "
+            "мне не хватает нескольких деталей:",
+            "",
+        ]
+        body += [f"{i}. {q}" for i, q in enumerate(questions, 1)] or ["(бриф полный, вопросов нет)"]
+        body += [
+            "",
+            f"Как ответите — пришлю смету и план работ. Ориентир по моим ценам: "
+            f"{money(c['price_min'])} – {money(c['price_max'])} {c['unit']}, обычный срок {c['lead_time_days']} дн.",
+            "",
+            c["name"],
+        ]
+        return "\n".join(body)
+
+    if mode == "decline":
+        code, text = budget_verdict(brief, c)
+        budget = brief.get("budget")
+        body = [
+            greeting,
+            "",
+            f"Спасибо за заявку. По задаче «{service}» честно скажу сразу: в {money(budget)} я не уложусь. "
+            f"Мои работы этого типа стоят от {money(c['price_min'])} {c['unit']} — "
+            "за меньшую сумму получится хуже, чем вы ожидаете, и это будет неприятно обоим.",
+            "",
+            "Что можно сделать в вашем бюджете:",
+            f"— взять меньший объём работы и сделать его нормально;",
+            f"— упростить формат (например, вместо полного продакшна — работа с вашим материалом);",
+            f"— вернуться к задаче, когда бюджет вырастет: смету на полный объём пришлю по запросу.",
+            "",
+            "Если подходит один из вариантов — напишите, обсудим.",
+            "",
+            c["name"],
+        ]
+        return "\n".join(body)
+
+    # accept
+    budget_code, budget_text = budget_verdict(brief, c)
+    deadline = brief.get("deadline_days")
+    body = [
+        greeting,
+        "",
+        f"Задача понятна, берусь. Коротко, как я её понял:",
+        "",
+        f"— Услуга: {service}",
+        f"— Объём: {brief.get('volume') or 'уточним на созвоне'}",
+        f"— Формат: {', '.join(brief.get('formats') or []) or 'уточним'}",
+        f"— Стиль: {', '.join(brief.get('styles') or []) or 'уточним'}",
+        f"— Срок: {str(deadline) + ' дн.' if deadline else 'обсудим'} "
+        f"(мой обычный срок — {c['lead_time_days']} дн.)",
+        f"— Бюджет: {money(brief.get('budget'))}",
+        "",
+    ]
+    if questions:
+        body += ["Один момент уточню до старта: " + questions[0], ""]
+    body += [
+        "Если всё верно — подтвердите, и я ставлю задачу в график.",
+        "",
+        c["name"],
+    ]
+    return "\n".join(body)
+
+
+def incoming_for(c, requests, min_score=0):
+    """Считает входящие заявки под конкретного подрядчика и сортирует по совпадению."""
+    rows = []
+    for request in requests:
+        brief = request["brief"]
+        score, reasons, risks = score_contractor(brief, c)
+        budget_code, budget_text = budget_verdict(brief, c)
+        deadline_code, deadline_text = deadline_verdict(brief, c)
+        rows.append({
+            "request": request,
+            "brief": brief,
+            "score": score,
+            "reasons": reasons,
+            "risks": risks,
+            "budget_code": budget_code,
+            "budget_text": budget_text,
+            "deadline_code": deadline_code,
+            "deadline_text": deadline_text,
+            "completeness": brief_completeness(brief),
+        })
+    rows = [r for r in rows if r["score"] >= min_score]
+    rows.sort(key=lambda r: -r["score"])
+    return rows
