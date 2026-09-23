@@ -98,6 +98,35 @@ def find_example(text):
 # ==========================================================================
 # ВКЛАДКА 1. ЗАКАЗЧИК
 # ==========================================================================
+def build_brief(text):
+    """Собирает бриф из свободного текста тем способом, который доступен."""
+    example = find_example(text)
+    if AI_ON:
+        brief, source = ai.parse_request_ai(text, CONTRACTORS)
+    elif example:
+        brief, source = dict(example["ai_brief"]), "demo"
+    else:
+        brief, source = core.parse_request_offline(text), "offline"
+    return brief, source, example
+
+
+def explain(brief, results, example_title):
+    """Объяснения по каждому подрядчику: от модели или заготовленные."""
+    if AI_ON:
+        return ai.explain_matches_ai(brief, results)
+    for example in EXAMPLES:
+        if example["title"] == example_title:
+            return example.get("ai_explanations", {})
+    return {}
+
+
+def recalculate(brief):
+    """Пересчитывает подбор и объяснения и кладёт их в состояние страницы."""
+    results = core.match(brief, CONTRACTORS, top_n=5)
+    st.session_state.results = results
+    st.session_state.explanations = explain(brief, results, st.session_state.get("example_title"))
+
+
 with tab_customer:
     if "request_text" not in st.session_state:
         st.session_state.request_text = EXAMPLES[0]["text"]
@@ -109,6 +138,7 @@ with tab_customer:
     for col, example in zip(example_cols, EXAMPLES):
         if col.button(example["title"], use_container_width=True, key="ex_" + example["title"]):
             st.session_state.request_text = example["text"]
+            st.session_state.pop("brief", None)
 
     request_text = st.text_area(
         "Запрос обычными словами",
@@ -122,26 +152,24 @@ with tab_customer:
     if go:
         if not request_text.strip():
             st.warning("Напишите запрос или выберите готовый пример.")
-            st.stop()
+        else:
+            with st.spinner("Разбираю запрос…"):
+                brief, source, example = build_brief(request_text)
+            st.session_state.brief = brief
+            st.session_state.brief_source = source
+            st.session_state.brief_start = core.brief_completeness(brief)
+            st.session_state.example_title = example["title"] if example else None
+            st.session_state.used_text = request_text
+            with st.spinner("Подбираю подрядчиков…"):
+                recalculate(brief)
 
-        example = find_example(request_text)
+    brief = st.session_state.get("brief")
 
-        with st.spinner("Разбираю запрос…"):
-            if AI_ON:
-                brief, source = ai.parse_request_ai(request_text, CONTRACTORS)
-            elif example:
-                brief, source = dict(example["ai_brief"]), "demo"
-            else:
-                brief, source = core.parse_request_offline(request_text), "offline"
-
-        results = core.match(brief, CONTRACTORS, top_n=5)
-
-        explanations = {}
-        if AI_ON:
-            with st.spinner("Объясняю подбор…"):
-                explanations = ai.explain_matches_ai(brief, results)
-        elif example:
-            explanations = example.get("ai_explanations", {})
+    if brief:
+        source = st.session_state.get("brief_source")
+        used_text = st.session_state.get("used_text", "")
+        results = st.session_state.get("results", [])
+        explanations = st.session_state.get("explanations", {})
 
         # ---------------- Бриф ----------------
         st.divider()
@@ -155,14 +183,18 @@ with tab_customer:
                 st.warning(f"Модель недоступна, работаю по правилам. Причина: {brief['error']}")
 
         done = core.brief_completeness(brief)
-        st.progress(done / 100, text=f"Бриф заполнен на {done}%")
+        start = st.session_state.get("brief_start", done)
+        label = f"Бриф заполнен на {done}%"
+        if done > start:
+            label += f"  (было {start}%, +{done - start} п.п. после ваших ответов)"
+        st.progress(done / 100, text=label)
 
-        fields = st.columns(4)
-        fields[0].metric("Услуга", brief.get("service") or "—")
-        fields[1].metric("Город", brief.get("city") or "—")
-        fields[2].metric("Бюджет", core.money(brief.get("budget")))
         deadline = brief.get("deadline_days")
-        fields[3].metric("Срок", f"{deadline} дн." if deadline else "не указан")
+        fields = st.columns(4)
+        fields[0].markdown(f"**Услуга**  \n#### {brief.get('service') or '—'}")
+        fields[1].markdown(f"**Город**  \n#### {brief.get('city') or '—'}")
+        fields[2].markdown(f"**Бюджет**  \n#### {core.money(brief.get('budget'))}")
+        fields[3].markdown(f"**Срок**  \n#### {str(deadline) + ' дн.' if deadline else 'не указан'}")
 
         left, right = st.columns(2)
         with left:
@@ -176,10 +208,55 @@ with tab_customer:
                 for a in brief["assumptions"]:
                     st.markdown(f"- {a}")
 
-        questions = core.follow_up_questions(brief)
-        if questions:
-            st.warning("**Это надо уточнить у заказчика до начала работы:**\n\n" +
-                       "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1)))
+        # ---------------- Уточняющий диалог ----------------
+        gaps = core.missing_fields(brief)
+        if gaps:
+            st.markdown("#### Ответьте на вопросы — бриф дозаполнится, а подбор пересчитается")
+            st.caption("Отвечать на все не обязательно: заполните то, что знаете, остальное оставьте пустым.")
+
+            with st.form("clarify"):
+                answers = {}
+                for field in gaps[:5]:
+                    question = core.FOLLOW_UP_QUESTIONS.get(field, field)
+
+                    if field == "service":
+                        options = ["не знаю"] + core.all_services(CONTRACTORS)
+                        answers[field] = st.selectbox(question, options)
+                    elif field == "city":
+                        options = ["не знаю"] + core.all_cities(CONTRACTORS)
+                        answers[field] = st.selectbox(question, options)
+                    elif field == "budget":
+                        answers[field] = st.number_input(
+                            question + "  (0 — если ещё не знаете)",
+                            min_value=0, max_value=50_000_000, value=0, step=10_000,
+                        )
+                    elif field == "deadline_days":
+                        answers[field] = st.number_input(
+                            question + "  (0 — если срок не горит)",
+                            min_value=0, max_value=365, value=0, step=1,
+                        )
+                    elif field == "formats":
+                        answers[field] = st.text_input(question, placeholder="например: рилс, вертикальное видео")
+                    else:
+                        answers[field] = st.text_input(question)
+
+                submitted = st.form_submit_button("Дополнить бриф и пересчитать подбор",
+                                                  type="primary", use_container_width=True)
+
+            if submitted:
+                for field, value in answers.items():
+                    if value in (None, "", 0, "не знаю"):
+                        continue
+                    if field == "formats":
+                        brief[field] = [x.strip() for x in str(value).split(",") if x.strip()]
+                    elif field in ("budget", "deadline_days"):
+                        brief[field] = int(value)
+                    else:
+                        brief[field] = value
+                st.session_state.brief = brief
+                with st.spinner("Пересчитываю подбор…"):
+                    recalculate(brief)
+                st.rerun()
         else:
             st.success("Бриф полный — подрядчику можно отправлять как есть.")
 
@@ -190,7 +267,7 @@ with tab_customer:
         for place, r in enumerate(results, 1):
             c = r["contractor"]
             with st.container(border=True):
-                head, score_col = st.columns([5, 1])
+                head, score_col = st.columns([4, 1.15])
                 head.markdown(
                     f"### {place}. {c['name']}\n"
                     f"{c['service']} · {c['city']} · "
@@ -219,7 +296,7 @@ with tab_customer:
         st.divider()
         st.subheader("4. Готовый бриф для отправки подрядчику")
         st.caption("Скопируйте и отправьте — подрядчик сразу видит задачу, бюджет и срок.")
-        brief_text = core.render_brief_text(brief, request_text)
+        brief_text = core.render_brief_text(brief, used_text)
         st.code(brief_text, language=None)
         st.download_button("Скачать бриф файлом", brief_text, file_name="bref.txt",
                            use_container_width=True, key="dl_customer")
@@ -242,10 +319,10 @@ with tab_contractor:
     me = CONTRACTORS[names.index(chosen)]
 
     profile = st.columns(4)
-    profile[0].metric("Услуга", me["service"])
-    profile[1].metric("Город", me["city"])
-    profile[2].metric("Ваша вилка", f"{core.money(me['price_min'])} – {core.money(me['price_max'])}")
-    profile[3].metric("Обычный срок", f"{me['lead_time_days']} дн.")
+    profile[0].markdown(f"**Услуга**  \n#### {me['service']}")
+    profile[1].markdown(f"**Город**  \n#### {me['city']}")
+    profile[2].markdown(f"**Ваша вилка**  \n#### {core.money(me['price_min'])} – {core.money(me['price_max'])}")
+    profile[3].markdown(f"**Обычный срок**  \n#### {me['lead_time_days']} дн.")
     st.caption(f"Форматы: {', '.join(me['formats'])} · Стиль: {', '.join(me['styles'])} · Языки: {', '.join(me['languages'])}")
 
     st.divider()
@@ -278,7 +355,7 @@ with tab_contractor:
         quality, quality_hint = core.brief_quality_label(brief)
 
         with st.container(border=True):
-            head, score_col = st.columns([5, 1])
+            head, score_col = st.columns([4, 1.15])
             head.markdown(
                 f"### {request['customer']}\n"
                 f"{brief.get('service') or '—'} · {brief.get('city') or '—'} · "
