@@ -788,3 +788,110 @@ def deal_stats(deals):
         "money_in_work": money_in_work,
         "requests_answered": len({d["request_id"] for d in deals}),
     }
+
+
+# --------------------------------------------------------------------------
+# Выгрузка данных в CSV
+# --------------------------------------------------------------------------
+
+def to_csv(rows, columns=None):
+    """Собирает CSV, который нормально открывается в Excel на русском.
+
+    Разделитель «;» и BOM в начале — иначе Excel ломает кириллицу и склеивает
+    всё в одну колонку.
+    """
+    import csv
+    import io
+
+    rows = rows or []
+    if columns is None:
+        columns = list(rows[0].keys()) if rows else []
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=columns, delimiter=";",
+                            lineterminator="\r\n", extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({c: row.get(c, "") for c in columns})
+    return "﻿" + buffer.getvalue()
+
+
+def match_rows_for_csv(brief, results):
+    """Результат подбора в виде строк для выгрузки."""
+    return [
+        {
+            "Место": place,
+            "Подрядчик": r["contractor"]["name"],
+            "Совпадение, %": r["score"],
+            "Услуга": r["contractor"]["service"],
+            "Город": r["contractor"]["city"],
+            "Цена от, ₸": r["contractor"]["price_min"],
+            "Цена до, ₸": r["contractor"]["price_max"],
+            "Единица": r["contractor"]["unit"],
+            "Срок, дн.": r["contractor"]["lead_time_days"],
+            "Рейтинг": r["contractor"]["rating"],
+            "Отзывов": r["contractor"]["reviews"],
+            "Почему подходит": "; ".join(r["reasons"]),
+            "На что обратить внимание": "; ".join(r["risks"]),
+            "Запрошенная услуга": brief.get("service") or "",
+            "Бюджет заказчика, ₸": brief.get("budget") or "",
+            "Срок заказчика, дн.": brief.get("deadline_days") or "",
+        }
+        for place, r in enumerate(results, 1)
+    ]
+
+
+def incoming_rows_for_csv(rows):
+    """Входящие заявки подрядчика в виде строк для выгрузки."""
+    return [
+        {
+            "Заявка": r["request"]["id"],
+            "Заказчик": r["request"]["customer"],
+            "Получена": r["request"]["date"],
+            "Совпадение, %": r["score"],
+            "Услуга": r["brief"].get("service") or "",
+            "Город": r["brief"].get("city") or "",
+            "Бюджет, ₸": r["brief"].get("budget") or "",
+            "Срок, дн.": r["brief"].get("deadline_days") or "",
+            "Полнота брифа, %": r["completeness"],
+            "Вердикт по бюджету": r["budget_text"],
+            "Вердикт по сроку": r["deadline_text"],
+            "Запрос заказчика": r["request"]["text"],
+        }
+        for r in rows
+    ]
+
+
+def deals_rows_for_csv(deals):
+    """Сделки в виде строк для выгрузки."""
+    return [
+        {
+            "Время": d["at"],
+            "Заявка": d["request_id"],
+            "Заказчик": d["customer"],
+            "Подрядчик": d["contractor_name"],
+            "Услуга": d.get("service") or "",
+            "Бюджет, ₸": d.get("budget") or "",
+            "Статус": d["status"],
+            "Текст ответа": d["reply"].replace("\n", " / "),
+        }
+        for d in deals
+    ]
+
+
+def market_rows_for_csv(stats):
+    """Сводка по рынку в виде строк «показатель — значение»."""
+    return [
+        {"Показатель": "Заявок всего", "Значение": stats["total"]},
+        {"Показатель": "Полнота исходного запроса, %", "Значение": stats["completeness_before"]},
+        {"Показатель": "Полнота после разбора, %", "Значение": stats["completeness_after"]},
+        {"Показатель": "Прирост полноты, п.п.", "Значение": stats["lift"]},
+        {"Показатель": "Заявок без бюджета", "Значение": stats["no_budget"]},
+        {"Показатель": "Заявок без срока", "Значение": stats["no_deadline"]},
+        {"Показатель": "Профильных пар «подрядчик — заявка»", "Значение": stats["relevant_pairs"]},
+        {"Показатель": "Из них тупиковые по бюджету", "Значение": stats["bad_budget_pairs"]},
+        {"Показатель": "Доля тупиковых, %", "Значение": stats["wasted_share"]},
+        {"Показатель": "Заявок закрывает рынок", "Значение": stats["matched"]},
+        {"Показатель": "Заявок без исполнителя", "Значение": stats["unmatched"]},
+        {"Показатель": "Подрядчиков без единой заявки", "Значение": len(stats["idle"])},
+    ]

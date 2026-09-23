@@ -298,8 +298,16 @@ with tab_customer:
         st.caption("Скопируйте и отправьте — подрядчик сразу видит задачу, бюджет и срок.")
         brief_text = core.render_brief_text(brief, used_text)
         st.code(brief_text, language=None)
-        st.download_button("Скачать бриф файлом", brief_text, file_name="bref.txt",
-                           use_container_width=True, key="dl_customer")
+
+        dl_a, dl_b = st.columns(2)
+        dl_a.download_button("Скачать бриф файлом", brief_text, file_name="bref.txt",
+                             use_container_width=True, key="dl_customer")
+        dl_b.download_button(
+            "Скачать подбор в CSV",
+            core.to_csv(core.match_rows_for_csv(brief, results)),
+            file_name="podbor.csv", mime="text/csv",
+            use_container_width=True, key="dl_customer_csv",
+        )
 
 
 # ==========================================================================
@@ -351,7 +359,14 @@ with tab_contractor:
                  for d in reversed(deals)],
                 use_container_width=True, hide_index=True,
             )
-            if st.button("Сбросить демо-сделки", key="clear_deals"):
+            act_a, act_b = st.columns(2)
+            act_b.download_button(
+                "Скачать сделки в CSV",
+                core.to_csv(core.deals_rows_for_csv(deals)),
+                file_name="sdelki.csv", mime="text/csv",
+                use_container_width=True, key="dl_deals_csv",
+            )
+            if act_a.button("Сбросить демо-сделки", use_container_width=True, key="clear_deals"):
                 core.clear_deals()
                 st.rerun()
 
@@ -379,7 +394,14 @@ with tab_contractor:
         f"из них по бюджету: **{fits}**."
     )
 
-    if not rows:
+    if rows:
+        st.download_button(
+            "Скачать эти заявки в CSV",
+            core.to_csv(core.incoming_rows_for_csv(rows)),
+            file_name="zayavki.csv", mime="text/csv",
+            key="dl_incoming_csv",
+        )
+    else:
         st.info("Под текущие фильтры заявок нет. Сдвиньте ползунок совпадения влево.")
 
     for r in rows:
@@ -484,6 +506,11 @@ with tab_market:
     stats = core.market_stats(CONTRACTORS, REQUESTS)
 
     st.subheader("Что именно ломает сделки на креативном рынке")
+    st.download_button(
+        "Скачать сводку в CSV",
+        core.to_csv(core.market_rows_for_csv(stats)),
+        file_name="rynok.csv", mime="text/csv", key="dl_market_csv",
+    )
     st.caption(
         f"Посчитано по демонстрационным данным: {len(REQUESTS)} заявок заказчиков "
         f"и {len(CONTRACTORS)} подрядчиков. Все цифры пересчитываются из данных, не вписаны руками."
@@ -521,13 +548,14 @@ with tab_market:
         use_container_width=True,
     )
     with st.expander("Показать те же данные таблицей"):
-        st.dataframe(
-            [{"Заказчик": r["customer"],
-              "Исходный запрос, %": r["before"],
-              "После разбора, %": r["after"],
-              "Прирост, п.п.": r["after"] - r["before"]} for r in stats["rows"]],
-            use_container_width=True, hide_index=True,
-        )
+        table = [{"Заказчик": r["customer"],
+                  "Исходный запрос, %": r["before"],
+                  "После разбора, %": r["after"],
+                  "Прирост, п.п.": r["after"] - r["before"]} for r in stats["rows"]]
+        st.dataframe(table, use_container_width=True, hide_index=True)
+        st.download_button("Скачать в CSV", core.to_csv(table),
+                           file_name="polnota_brifov.csv", mime="text/csv",
+                           key="dl_briefs_csv")
 
     st.divider()
 
@@ -576,11 +604,12 @@ with tab_market:
         use_container_width=True,
     )
     with st.expander("Показать те же данные таблицей"):
-        st.dataframe(
-            [{"Услуга": d["service"], "Заявок": d["demand"], "Подрядчиков": d["supply"]}
-             for d in stats["demand_supply"]],
-            use_container_width=True, hide_index=True,
-        )
+        table = [{"Услуга": d["service"], "Заявок": d["demand"], "Подрядчиков": d["supply"]}
+                 for d in stats["demand_supply"]]
+        st.dataframe(table, use_container_width=True, hide_index=True)
+        st.download_button("Скачать в CSV", core.to_csv(table),
+                           file_name="spros_predlozhenie.csv", mime="text/csv",
+                           key="dl_supply_csv")
 
     # ---------------- Что стало со сделками ----------------
     deals_all = core.load_deals()
