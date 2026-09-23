@@ -7,10 +7,17 @@
 Запуск:  streamlit run app.py
 """
 
+import altair as alt
+import pandas as pd
 import streamlit as st
 
 import ai
 import core
+
+# Палитра для графиков: слоты 1 и 2 проверенной категориальной палитры
+SERIES_1 = "#2a78d6"   # синий
+SERIES_2 = "#eb6834"   # оранжевый
+INK_MUTED = "#52514e"
 
 st.set_page_config(page_title="Умный подбор подрядчиков", page_icon="🎬", layout="wide")
 
@@ -75,7 +82,9 @@ col_a, col_b = st.columns(2)
 col_a.markdown("🙍 **Боль заказчика:** не может сформулировать, что ему нужно.\n\n→ Вкладка «Я заказчик» собирает бриф за него и задаёт недостающие вопросы.")
 col_b.markdown("🎥 **Боль подрядчика:** кривые брифы и заказчики не по бюджету.\n\n→ Вкладка «Я подрядчик» показывает качество брифа и вердикт по бюджету до первого сообщения.")
 
-tab_customer, tab_contractor = st.tabs(["🙍 Я заказчик", "🎥 Я подрядчик"])
+tab_customer, tab_contractor, tab_market = st.tabs(
+    ["🙍 Я заказчик", "🎥 Я подрядчик", "📊 Рынок"]
+)
 
 
 def find_example(text):
@@ -314,3 +323,138 @@ with tab_contractor:
                 st.download_button("Скачать ответ файлом", reply,
                                    file_name=f"otvet_{request['id']}.txt",
                                    key="dl_" + request["id"])
+
+
+# ==========================================================================
+# ВКЛАДКА 3. РЫНОК
+# ==========================================================================
+def bar_chart(data, y_field, y_title, color_field, color_domain, x_title, height):
+    """Горизонтальная столбчатая диаграмма с двумя рядами."""
+    return (
+        alt.Chart(data, height=height)
+        .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4, height=11)
+        .encode(
+            y=alt.Y(f"{y_field}:N", title=None, sort=None,
+                    axis=alt.Axis(labelLimit=220, domain=False, ticks=False,
+                                  labelColor=INK_MUTED, titleColor=INK_MUTED)),
+            x=alt.X("value:Q", title=x_title,
+                    axis=alt.Axis(grid=True, gridColor="#e8e8e6", domain=False,
+                                  ticks=False, labelColor=INK_MUTED, titleColor=INK_MUTED)),
+            yOffset=alt.YOffset(f"{color_field}:N", sort=color_domain),
+            color=alt.Color(
+                f"{color_field}:N",
+                title=None,
+                scale=alt.Scale(domain=color_domain, range=[SERIES_1, SERIES_2]),
+                legend=alt.Legend(orient="top", labelColor=INK_MUTED),
+            ),
+            tooltip=[
+                alt.Tooltip(f"{y_field}:N", title=y_title),
+                alt.Tooltip(f"{color_field}:N", title=" "),
+                alt.Tooltip("value:Q", title=x_title),
+            ],
+        )
+        .configure_view(strokeWidth=0)
+    )
+
+
+with tab_market:
+    stats = core.market_stats(CONTRACTORS, REQUESTS)
+
+    st.subheader("Что именно ломает сделки на креативном рынке")
+    st.caption(
+        f"Посчитано по демонстрационным данным: {len(REQUESTS)} заявок заказчиков "
+        f"и {len(CONTRACTORS)} подрядчиков. Все цифры пересчитываются из данных, не вписаны руками."
+    )
+
+    # ---------------- Боль заказчика ----------------
+    st.markdown("### 🙍 Боль заказчика: запрос не равен брифу")
+
+    tiles = st.columns(4)
+    tiles[0].metric("Запрос как есть", f"{stats['completeness_before']}%")
+    tiles[1].metric("После разбора", f"{stats['completeness_after']}%",
+                    delta=f"+{stats['lift']} п.п.")
+    tiles[2].metric("Без бюджета",
+                    f"{stats['no_budget']} из {stats['total']}",
+                    delta=f"{round(stats['no_budget'] / stats['total'] * 100)}% заявок",
+                    delta_color="inverse")
+    tiles[3].metric("Без срока",
+                    f"{stats['no_deadline']} из {stats['total']}",
+                    delta=f"{round(stats['no_deadline'] / stats['total'] * 100)}% заявок",
+                    delta_color="inverse")
+
+    st.markdown(
+        f"**Заказчик в среднем присылает бриф, заполненный на {stats['completeness_before']}%.** "
+        f"После разбора запроса приложением — **{stats['completeness_after']}%**. "
+        f"Это {stats['lift']} процентных пунктов, которые подрядчику больше не нужно вытягивать перепиской."
+    )
+
+    before_after = pd.DataFrame(
+        [{"Заказчик": r["customer"], "Ряд": "Исходный запрос", "value": r["before"]} for r in stats["rows"]] +
+        [{"Заказчик": r["customer"], "Ряд": "После разбора", "value": r["after"]} for r in stats["rows"]]
+    )
+    st.altair_chart(
+        bar_chart(before_after, "Заказчик", "Заказчик", "Ряд",
+                  ["Исходный запрос", "После разбора"], "Полнота брифа, %", 430),
+        use_container_width=True,
+    )
+    with st.expander("Показать те же данные таблицей"):
+        st.dataframe(
+            [{"Заказчик": r["customer"],
+              "Исходный запрос, %": r["before"],
+              "После разбора, %": r["after"],
+              "Прирост, п.п.": r["after"] - r["before"]} for r in stats["rows"]],
+            use_container_width=True, hide_index=True,
+        )
+
+    st.divider()
+
+    # ---------------- Боль подрядчика ----------------
+    st.markdown("### 🎥 Боль подрядчика: переписка, которая ничем не кончится")
+
+    tiles2 = st.columns(4)
+    tiles2[0].metric("Профильных пар", stats["relevant_pairs"],
+                     help="Пары «подрядчик — заявка», где профиль подрядчика подходит заявке")
+    tiles2[1].metric("Тупик по бюджету", stats["bad_budget_pairs"],
+                     delta=f"{stats['wasted_share']}% впустую", delta_color="inverse",
+                     help="Профиль подходит, но по деньгам не сойдутся")
+    tiles2[2].metric("Рынок закрывает", f"{stats['matched']} из {stats['total']}",
+                     help="Заявки, на которые нашёлся подрядчик по профилю и по бюджету")
+    tiles2[3].metric("Простаивают", f"{len(stats['idle'])} из {len(CONTRACTORS)}",
+                     help="Подрядчики, которым не подошла ни одна заявка")
+
+    st.markdown(
+        f"**{stats['wasted_share']}% обращений, которые формально подходят подрядчику по профилю, "
+        f"не сойдутся по бюджету.** Сегодня это выясняется после трёх дней переписки. "
+        f"В приложении — до первого сообщения, на вкладке «Я подрядчик»."
+    )
+
+    if stats["reasons"]:
+        st.markdown("**Почему заявки остаются без исполнителя:**")
+        for reason, count in sorted(stats["reasons"].items(), key=lambda x: -x[1]):
+            word = "заявка" if count == 1 else ("заявки" if count < 5 else "заявок")
+            st.markdown(f"- {reason} — **{count}** {word} из {stats['total']}")
+    if stats["idle"]:
+        st.markdown("**Простаивают без подходящих заявок:** " +
+                    ", ".join(f"{c['name']} ({c['service']})" for c in stats["idle"]))
+
+    st.divider()
+
+    # ---------------- Спрос и предложение ----------------
+    st.markdown("### ⚖️ Спрос и предложение по услугам")
+    st.caption("Где подрядчиков больше, чем заявок, — там конкуренция. Где наоборот — там дефицит.")
+
+    demand_supply = pd.DataFrame(
+        [{"Услуга": d["service"], "Ряд": "Заявок (спрос)", "value": d["demand"]} for d in stats["demand_supply"]] +
+        [{"Услуга": d["service"], "Ряд": "Подрядчиков (предложение)", "value": d["supply"]} for d in stats["demand_supply"]]
+    )
+    st.altair_chart(
+        bar_chart(demand_supply, "Услуга", "Услуга", "Ряд",
+                  ["Заявок (спрос)", "Подрядчиков (предложение)"], "Количество", 560),
+        use_container_width=True,
+    )
+    with st.expander("Показать те же данные таблицей"):
+        st.dataframe(
+            [{"Услуга": d["service"], "Заявок": d["demand"], "Подрядчиков": d["supply"]}
+             for d in stats["demand_supply"]],
+            use_container_width=True, hide_index=True,
+        )

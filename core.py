@@ -582,3 +582,129 @@ def incoming_for(c, requests, min_score=0):
     rows = [r for r in rows if r["score"] >= min_score]
     rows.sort(key=lambda r: -r["score"])
     return rows
+
+
+# --------------------------------------------------------------------------
+# Метрики рынка: что именно ломает сделки
+# --------------------------------------------------------------------------
+
+MATCH_THRESHOLD = 60  # с какого совпадения считаем, что подрядчик реально подходит
+
+
+def request_status(request, contractors):
+    """Может ли рынок закрыть эту заявку и, если нет, почему.
+
+    Возвращает (код, причина словами). Коды: matched / no_profile /
+    no_budget / budget_low / raw_brief / other.
+    """
+    brief = request["brief"]
+    service = brief.get("service")
+
+    profile = [c for c in contractors if c["service"] == service] if service else contractors
+
+    for c in contractors:
+        score, _, _ = score_contractor(brief, c)
+        budget_code, _ = budget_verdict(brief, c)
+        if score >= MATCH_THRESHOLD and budget_code in ("fits", "above"):
+            return "matched", "Есть подходящий подрядчик по бюджету."
+
+    if not profile:
+        return "no_profile", "Нет подрядчиков такого профиля"
+    if not brief.get("budget"):
+        return "no_budget", "Бюджет не назван"
+    if all(brief["budget"] < c["price_min"] for c in profile):
+        return "budget_low", "Бюджет ниже рынка"
+    if brief_completeness(brief) < 60:
+        return "raw_brief", "Бриф слишком сырой"
+    return "other", "Не сошлись срок, город или формат"
+
+
+def market_stats(contractors, requests):
+    """Считает сводку по рынку для вкладки «Рынок»."""
+    total = len(requests)
+
+    # --- Боль заказчика: насколько запрос вырастает после разбора ---
+    rows = []
+    for request in requests:
+        before = brief_completeness(parse_request_offline(request["text"]))
+        after = brief_completeness(request["brief"])
+        rows.append({
+            "customer": request["customer"],
+            "before": before,
+            "after": after,
+        })
+    completeness_before = round(sum(r["before"] for r in rows) / total) if total else 0
+    completeness_after = round(sum(r["after"] for r in rows) / total) if total else 0
+
+    no_budget = sum(1 for r in requests if not r["brief"].get("budget"))
+    no_deadline = sum(1 for r in requests if not r["brief"].get("deadline_days"))
+    no_goal = sum(1 for r in requests if not r["brief"].get("goal"))
+
+    # --- Боль подрядчика: сколько профильных заявок бесполезны ---
+    relevant_pairs = 0
+    bad_budget_pairs = 0
+    offers_per_request = {}
+    requests_per_contractor = {}
+
+    for c in contractors:
+        requests_per_contractor[c["id"]] = 0
+        for request in requests:
+            brief = request["brief"]
+            score, _, _ = score_contractor(brief, c)
+            if score < MATCH_THRESHOLD:
+                continue
+            relevant_pairs += 1
+            budget_code, _ = budget_verdict(brief, c)
+            if budget_code in ("fits", "above"):
+                offers_per_request[request["id"]] = offers_per_request.get(request["id"], 0) + 1
+                requests_per_contractor[c["id"]] += 1
+            else:
+                bad_budget_pairs += 1
+
+    wasted_share = round(bad_budget_pairs / relevant_pairs * 100) if relevant_pairs else 0
+
+    # --- Какие заявки рынок вообще не закрывает и почему ---
+    statuses = {}
+    reasons = {}
+    for request in requests:
+        code, reason = request_status(request, contractors)
+        statuses[request["id"]] = code
+        if code != "matched":
+            reasons[reason] = reasons.get(reason, 0) + 1
+    matched = sum(1 for code in statuses.values() if code == "matched")
+
+    idle = [c for c in contractors if requests_per_contractor[c["id"]] == 0]
+
+    # --- Спрос и предложение по услугам ---
+    services = sorted({c["service"] for c in contractors} |
+                      {r["brief"].get("service") for r in requests if r["brief"].get("service")})
+    demand_supply = [
+        {
+            "service": service,
+            "demand": sum(1 for r in requests if r["brief"].get("service") == service),
+            "supply": sum(1 for c in contractors if c["service"] == service),
+        }
+        for service in services
+    ]
+
+    return {
+        "total": total,
+        "rows": rows,
+        "completeness_before": completeness_before,
+        "completeness_after": completeness_after,
+        "lift": completeness_after - completeness_before,
+        "no_budget": no_budget,
+        "no_deadline": no_deadline,
+        "no_goal": no_goal,
+        "relevant_pairs": relevant_pairs,
+        "bad_budget_pairs": bad_budget_pairs,
+        "wasted_share": wasted_share,
+        "matched": matched,
+        "unmatched": total - matched,
+        "reasons": reasons,
+        "statuses": statuses,
+        "idle": idle,
+        "requests_per_contractor": requests_per_contractor,
+        "offers_per_request": offers_per_request,
+        "demand_supply": demand_supply,
+    }
