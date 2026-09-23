@@ -325,19 +325,52 @@ with tab_contractor:
     profile[3].markdown(f"**Обычный срок**  \n#### {me['lead_time_days']} дн.")
     st.caption(f"Форматы: {', '.join(me['formats'])} · Стиль: {', '.join(me['styles'])} · Языки: {', '.join(me['languages'])}")
 
+    deals = core.load_deals()
+    my_deals = core.deals_by_request(deals, me["id"])
+    my_stats = core.deal_stats([d for d in deals if d["contractor_id"] == me["id"]])
+
     st.divider()
-    st.subheader("2. Входящие заявки")
+    st.subheader("2. Ваши сделки")
+
+    deal_cols = st.columns(4)
+    deal_cols[0].markdown(f"**Ответов отправлено**  \n#### {my_stats['total']}")
+    deal_cols[1].markdown(f"**🟢 Взято в работу**  \n#### {my_stats['accept']}")
+    deal_cols[2].markdown(f"**🟡 Уточняются**  \n#### {my_stats['clarify']}")
+    deal_cols[3].markdown(f"**🔴 Отказы по бюджету**  \n#### {my_stats['decline']}")
+
+    if my_stats["money_in_work"]:
+        st.markdown(f"**В работе на сумму: {core.money(my_stats['money_in_work'])}** "
+                    "(по заявкам, где заказчик назвал бюджет).")
+
+    if deals:
+        with st.expander(f"История всех сделок в системе ({len(deals)})"):
+            st.dataframe(
+                [{"Время": d["at"], "Подрядчик": d["contractor_name"], "Заказчик": d["customer"],
+                  "Услуга": d.get("service") or "—",
+                  "Бюджет": core.money(d.get("budget")), "Статус": d["status"]}
+                 for d in reversed(deals)],
+                use_container_width=True, hide_index=True,
+            )
+            if st.button("Сбросить демо-сделки", key="clear_deals"):
+                core.clear_deals()
+                st.rerun()
+
+    st.divider()
+    st.subheader("3. Входящие заявки")
 
     filter_cols = st.columns(3)
     min_score = filter_cols[0].slider("Показывать заявки с совпадением от, %", 0, 100, 50, step=5)
     hide_low = filter_cols[1].toggle("Скрыть заказчиков не по бюджету", value=False)
     only_full = filter_cols[2].toggle("Только заявки с полным брифом", value=False)
+    hide_answered = st.toggle("Скрыть заявки, на которые уже ответил", value=False)
 
     rows = core.incoming_for(me, REQUESTS, min_score=min_score)
     if hide_low:
         rows = [r for r in rows if r["budget_code"] != "low"]
     if only_full:
         rows = [r for r in rows if r["completeness"] >= 85]
+    if hide_answered:
+        rows = [r for r in rows if r["request"]["id"] not in my_deals]
 
     total = len(REQUESTS)
     fits = sum(1 for r in rows if r["budget_code"] in ("fits", "above"))
@@ -364,6 +397,11 @@ with tab_contractor:
                 f"{request['date']}"
             )
             score_col.metric("Совпадение", f"{r['score']}%")
+
+            deal = my_deals.get(request["id"])
+            if deal:
+                icon = core.DEAL_MODES[deal["mode"]][1]
+                st.success(f"{icon} Вы ответили {deal['at']}: **{deal['status']}**")
 
             st.markdown(f"> {request['text']}")
 
@@ -397,9 +435,17 @@ with tab_contractor:
                 reply = core.draft_reply(request, me, mode_key)
                 st.caption("Готовый ответ — скопируйте и отправьте заказчику.")
                 st.code(reply, language=None)
-                st.download_button("Скачать ответ файлом", reply,
-                                   file_name=f"otvet_{request['id']}.txt",
-                                   key="dl_" + request["id"])
+
+                send_col, download_col = st.columns(2)
+                if send_col.button("Отправить ответ и записать сделку",
+                                   type="primary", use_container_width=True,
+                                   key="send_" + request["id"]):
+                    core.add_deal(request, me, mode_key, reply)
+                    st.rerun()
+                download_col.download_button("Скачать ответ файлом", reply,
+                                             file_name=f"otvet_{request['id']}.txt",
+                                             use_container_width=True,
+                                             key="dl_" + request["id"])
 
 
 # ==========================================================================
@@ -535,3 +581,19 @@ with tab_market:
              for d in stats["demand_supply"]],
             use_container_width=True, hide_index=True,
         )
+
+    # ---------------- Что стало со сделками ----------------
+    deals_all = core.load_deals()
+    if deals_all:
+        st.divider()
+        st.markdown("### 🤝 Воронка: что стало с заявками")
+        d_stats = core.deal_stats(deals_all)
+        funnel = st.columns(4)
+        funnel[0].markdown(f"**Заявок всего**  \n#### {stats['total']}")
+        funnel[1].markdown(f"**Получили ответ**  \n#### {d_stats['requests_answered']}")
+        funnel[2].markdown(f"**🟢 Взято в работу**  \n#### {d_stats['accept']}")
+        funnel[3].markdown(f"**🔴 Отказ по бюджету**  \n#### {d_stats['decline']}")
+        if d_stats["money_in_work"]:
+            st.markdown(f"Подрядчики взяли работы на **{core.money(d_stats['money_in_work'])}**.")
+        st.caption("Считается по сделкам, которые вы записали на вкладке «Я подрядчик». "
+                   "Сбросить их можно там же, в истории сделок.")

@@ -708,3 +708,83 @@ def market_stats(contractors, requests):
         "offers_per_request": offers_per_request,
         "demand_supply": demand_supply,
     }
+
+
+# --------------------------------------------------------------------------
+# Сохранение сделок: чем закончилась заявка
+# --------------------------------------------------------------------------
+
+DEALS_PATH = DATA_DIR / "deals.json"
+
+DEAL_MODES = {
+    "accept": ("Взято в работу", "🟢"),
+    "clarify": ("Уточняются детали", "🟡"),
+    "decline": ("Отказ: не мой бюджет", "🔴"),
+}
+
+
+def load_deals():
+    """Читает сохранённые сделки. Файла нет — значит сделок ещё нет."""
+    if not DEALS_PATH.exists():
+        return []
+    try:
+        with open(DEALS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_deals(deals):
+    """Записывает сделки на диск, чтобы они пережили перезагрузку страницы."""
+    with open(DEALS_PATH, "w", encoding="utf-8") as f:
+        json.dump(deals, f, ensure_ascii=False, indent=2)
+
+
+def add_deal(request, contractor, mode, reply):
+    """Фиксирует ответ подрядчика на заявку. Повторный ответ заменяет прежний."""
+    from datetime import datetime
+
+    deals = [d for d in load_deals()
+             if not (d["request_id"] == request["id"] and d["contractor_id"] == contractor["id"])]
+    deals.append({
+        "request_id": request["id"],
+        "customer": request["customer"],
+        "contractor_id": contractor["id"],
+        "contractor_name": contractor["name"],
+        "mode": mode,
+        "status": DEAL_MODES[mode][0],
+        "budget": request["brief"].get("budget"),
+        "service": request["brief"].get("service"),
+        "at": datetime.now().strftime("%d.%m %H:%M"),
+        "reply": reply,
+    })
+    save_deals(deals)
+    return deals
+
+
+def clear_deals():
+    """Сбрасывает демонстрационные сделки."""
+    save_deals([])
+
+
+def deals_by_request(deals, contractor_id):
+    """Ответы конкретного подрядчика: id заявки -> запись о сделке."""
+    return {d["request_id"]: d for d in deals if d["contractor_id"] == contractor_id}
+
+
+def deal_stats(deals):
+    """Сводка: сколько взято в работу, уточняется и отклонено."""
+    counts = {mode: 0 for mode in DEAL_MODES}
+    money_in_work = 0
+    for d in deals:
+        counts[d["mode"]] = counts.get(d["mode"], 0) + 1
+        if d["mode"] == "accept":
+            money_in_work += d.get("budget") or 0
+    return {
+        "total": len(deals),
+        "accept": counts.get("accept", 0),
+        "clarify": counts.get("clarify", 0),
+        "decline": counts.get("decline", 0),
+        "money_in_work": money_in_work,
+        "requests_answered": len({d["request_id"] for d in deals}),
+    }

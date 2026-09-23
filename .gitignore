@@ -21,3 +21,6 @@ node_modules/
 # Временные файлы
 *.log
 .streamlit/secrets.toml
+
+# Демонстрационные сделки, которые создаются при работе с приложением
+data/deals.json
