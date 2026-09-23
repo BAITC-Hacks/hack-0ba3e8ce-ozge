@@ -2,30 +2,30 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Golos+Text:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#F4F6F5; --surface:#FFFFFF; --sunk:#EDF1F0;
-  --ink:#14211F; --ink-2:#3D4E4B; --muted:#687A76; --line:#DEE6E4;
-  --accent:#0C6E6B; --accent-soft:#D8EAE8;
-  --good:#1C7A4E; --warn:#A9711A; --crit:#A63B2F;
-  --good-bg:#E3F1E9; --warn-bg:#F7EEDD; --crit-bg:#F7E4E0;
+  --ground:#FFFFFF; --surface:#FFFFFF; --sunk:#F5F2F2;
+  --ink:#0E0D0D; --ink-2:#3B3636; --muted:#786F6F; --line:#E7E0E0;
+  --accent:#C4161C; --accent-btn:#C4161C; --on-accent:#FFFFFF; --accent-soft:#FDECEC;
+  --good:#14713F; --warn:#8A5A0B; --crit:#B01818;
+  --good-bg:#E9F3ED; --warn-bg:#FAF1DE; --crit-bg:#FBEAEA;
   --radius:10px;
   --display:"Bitter",Georgia,"Times New Roman",serif;
   --body:"Golos Text","Helvetica Neue",Arial,sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --ground:#0D1413; --surface:#151F1E; --sunk:#1B2625;
-    --ink:#ECF2F0; --ink-2:#C2CFCC; --muted:#8FA09D; --line:#243130;
-    --accent:#45B5AF; --accent-soft:#17302F;
-    --good:#4FAE7C; --warn:#D3A14A; --crit:#D9776A;
-    --good-bg:#14261D; --warn-bg:#2A2216; --crit-bg:#2B1A17;
+    --ground:#0D0C0C; --surface:#151313; --sunk:#1D1A1A;
+    --ink:#F6F2F2; --ink-2:#CFC7C7; --muted:#9A9090; --line:#2B2626;
+    --accent:#FF6259; --accent-btn:#C8302B; --on-accent:#FFFFFF; --accent-soft:#2A1514;
+    --good:#4FB27C; --warn:#D9A648; --crit:#F07068;
+    --good-bg:#10241A; --warn-bg:#2A2214; --crit-bg:#2A1514;
   }
 }
 :root[data-theme="dark"]{
-  --ground:#0D1413; --surface:#151F1E; --sunk:#1B2625;
-  --ink:#ECF2F0; --ink-2:#C2CFCC; --muted:#8FA09D; --line:#243130;
-  --accent:#45B5AF; --accent-soft:#17302F;
-  --good:#4FAE7C; --warn:#D3A14A; --crit:#D9776A;
-  --good-bg:#14261D; --warn-bg:#2A2216; --crit-bg:#2B1A17;
+    --ground:#0D0C0C; --surface:#151313; --sunk:#1D1A1A;
+  --ink:#F6F2F2; --ink-2:#CFC7C7; --muted:#9A9090; --line:#2B2626;
+  --accent:#FF6259; --accent-btn:#C8302B; --on-accent:#FFFFFF; --accent-soft:#2A1514;
+  --good:#4FB27C; --warn:#D9A648; --crit:#F07068;
+  --good-bg:#10241A; --warn-bg:#2A2214; --crit-bg:#2A1514;
 }
 *{box-sizing:border-box}
 body{background:var(--ground);color:var(--ink);font-family:var(--body);
@@ -39,6 +39,7 @@ p{margin:0}
 .eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600}
 .lede{color:var(--ink-2);font-size:17px;margin-top:12px;max-width:62ch}
 header{display:flex;flex-direction:column;gap:6px}
+.rule{width:42px;height:4px;background:var(--accent);border-radius:2px;margin-bottom:14px}
 
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:26px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
@@ -66,7 +67,7 @@ textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--surfac
   border:1px solid var(--line);border-radius:var(--radius);padding:12px 13px}
 textarea{min-height:104px;resize:vertical}
 textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
-.go{appearance:none;width:100%;margin-top:10px;background:var(--accent);color:#fff;border:0;
+.go{appearance:none;width:100%;margin-top:10px;background:var(--accent-btn);color:var(--on-accent);border:0;
   border-radius:var(--radius);padding:13px;font:inherit;font-weight:600;font-size:15.5px;cursor:pointer}
 .go:hover{filter:brightness(1.08)}
 .go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -91,10 +92,10 @@ textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;
   padding:15px;margin-top:10px;position:relative}
 .card.flag{border-left:3px solid var(--crit)}
 .card.warnflag{border-left:3px solid var(--warn)}
-.card.okflag{border-left:3px solid var(--good)}
+.card.okflag{border-left:3px solid var(--ink)}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .meta{font-size:13.5px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
-.score{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.score{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap}
 .bar{height:3px;background:var(--sunk);border-radius:2px;margin-top:9px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent)}
 .say{margin-top:11px;font-size:14.5px;color:var(--ink-2)}
@@ -124,6 +125,7 @@ footer a{color:var(--accent)}
 
 <div class="wrap">
 <header>
+  <div class="rule" aria-hidden="true"></div>
   <p class="eyebrow">HackAlem AI · Креативные индустрии · команда OZGE</p>
   <h1>Умный подбор подрядчиков</h1>
   <p class="lede">Заказчик пишет запрос обычными словами — площадка превращает его в нормальный бриф
